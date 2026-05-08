@@ -133,7 +133,16 @@
     <string name="settings_display_value">Auto day/night · 06:30 — 19:45</string>
     <string name="settings_about">About</string>
     <string name="settings_about_value">Xbi Connect Driver · v1.0.0</string>
+    <string name="settings_server">Server</string>
+    <string name="server_local">Local (dev)</string>
+    <string name="server_prod">Production</string>
+    <string name="settings_vin">Truck VIN</string>
     <string name="unlink">Unlink tablet</string>
+    <string name="unlink_confirm_title">Unlink this tablet?</string>
+    <string name="unlink_confirm_body">The saved VIN will be deleted and the tablet will return to the initial screen. You will have to pair it again with the correct truck.</string>
+    <string name="unlink_confirm_cta">Yes, unlink</string>
+    <string name="server_change_title">Server</string>
+    <string name="server_change_body">Switch between the local dev server and production. Only change this if you know what you\'re doing.</string>
 
     <string name="emergency_kicker">SOS · Operations Center</string>
     <string name="sending_alert">Sending alert…</string>

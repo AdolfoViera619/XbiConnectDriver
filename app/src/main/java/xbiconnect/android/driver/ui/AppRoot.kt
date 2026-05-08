@@ -8,15 +8,21 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import xbiconnect.android.driver.R
+import xbiconnect.android.driver.data.DriverPreferences
+import xbiconnect.android.driver.data.LocalDriverPreferences
 import xbiconnect.android.driver.ui.components.DriverIconName
 import xbiconnect.android.driver.ui.components.QuickToast
 import xbiconnect.android.driver.ui.components.RailItem
@@ -41,6 +47,8 @@ import xbiconnect.android.driver.ui.theme.XbiConnectDriverTheme
 
 @Composable
 fun AppRoot() {
+    val context = LocalContext.current
+    val prefs = remember { DriverPreferences(context.applicationContext) }
     var mode by rememberSaveable { mutableStateOf(ThemeMode.SYSTEM) }
     val systemDark = isSystemInDarkTheme()
     val isLight = when (mode) {
@@ -51,6 +59,7 @@ fun AppRoot() {
     XbiConnectDriverTheme(isLight = isLight) {
         CompositionLocalProvider(
             LocalThemeController provides ThemeController(mode) { mode = it },
+            LocalDriverPreferences provides prefs,
         ) {
             DriverApp()
         }
@@ -60,7 +69,22 @@ fun AppRoot() {
 @Composable
 private fun DriverApp() {
     val c = LocalAppColors.current
-    var stage by rememberSaveable { mutableStateOf(Stage.ONBOARD) }
+    val prefs = LocalDriverPreferences.current
+    val scope = rememberCoroutineScope()
+    val savedVin by prefs.vin.collectAsState(initial = INITIAL)
+
+    // Stage: derived from saved VIN once loaded.
+    // Until DataStore yields, we render nothing meaningful (sentinel = INITIAL).
+    var pendingVin by rememberSaveable { mutableStateOf<String?>(null) }
+    var stage by rememberSaveable { mutableStateOf<Stage?>(null) }
+
+    LaunchedEffect(savedVin) {
+        if (savedVin === INITIAL) return@LaunchedEffect
+        if (stage == null) {
+            stage = if (savedVin.isNullOrBlank()) Stage.ONBOARD else Stage.APP
+        }
+    }
+
     var section by rememberSaveable { mutableStateOf(Section.HOME) }
     var isMoving by rememberSaveable { mutableStateOf(false) }
     var emergency by rememberSaveable { mutableStateOf(false) }
@@ -76,10 +100,24 @@ private fun DriverApp() {
     Box(Modifier.fillMaxSize().background(c.pageBg)) {
         TabletFrame {
             when (stage) {
-                Stage.ONBOARD -> ScreenOnboarding(onFound = { stage = Stage.FOUND })
+                null -> { /* loading state — DataStore not yet read */ }
+                Stage.ONBOARD -> ScreenOnboarding(onFound = { vin ->
+                    pendingVin = vin
+                    stage = Stage.FOUND
+                })
                 Stage.FOUND -> ScreenTruckFound(
-                    onConfirm = { stage = Stage.APP },
-                    onReject = { stage = Stage.ONBOARD },
+                    vin = pendingVin ?: "",
+                    onConfirm = {
+                        scope.launch {
+                            pendingVin?.let { prefs.setVin(it) }
+                            stage = Stage.APP
+                            pendingVin = null
+                        }
+                    },
+                    onReject = {
+                        pendingVin = null
+                        stage = Stage.ONBOARD
+                    },
                 )
                 Stage.APP -> {
                     if (isMoving) {
@@ -99,6 +137,13 @@ private fun DriverApp() {
                             onSection = { section = it },
                             onSimulateDrive = { isMoving = true },
                             onEmergency = { emergency = true },
+                            onUnlink = {
+                                scope.launch {
+                                    prefs.clearVin()
+                                    section = Section.HOME
+                                    stage = Stage.ONBOARD
+                                }
+                            },
                         )
                     }
                 }
@@ -117,6 +162,7 @@ private fun AppShell(
     onSection: (Section) -> Unit,
     onSimulateDrive: () -> Unit,
     onEmergency: () -> Unit,
+    onUnlink: () -> Unit,
 ) {
     val items = listOf(
         RailItem(Section.HOME, DriverIconName.HOME, stringResource(R.string.nav_trip)),
@@ -146,8 +192,11 @@ private fun AppShell(
                     team = false,
                 )
                 Section.TEAM -> ScreenTeam()
-                Section.SETTINGS -> ScreenSettings()
+                Section.SETTINGS -> ScreenSettings(onUnlink = onUnlink)
             }
         }
     }
 }
+
+// Sentinel used to distinguish "DataStore not yet emitted" from "no VIN saved".
+private val INITIAL: String? = "__INITIAL_SENTINEL__"

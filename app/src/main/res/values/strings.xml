@@ -139,7 +139,16 @@
     <string name="settings_display_value">Auto día/noche · 06:30 — 19:45</string>
     <string name="settings_about">Acerca de</string>
     <string name="settings_about_value">Xbi Connect Driver · v1.0.0</string>
+    <string name="settings_server">Servidor</string>
+    <string name="server_local">Local (dev)</string>
+    <string name="server_prod">Producción</string>
+    <string name="settings_vin">VIN del camión</string>
     <string name="unlink">Desvincular tableta</string>
+    <string name="unlink_confirm_title">¿Desvincular esta tableta?</string>
+    <string name="unlink_confirm_body">El VIN guardado se borrará y la tableta volverá a la pantalla inicial. Tendrás que volver a vincularla con el camión correcto.</string>
+    <string name="unlink_confirm_cta">Sí, desvincular</string>
+    <string name="server_change_title">Servidor</string>
+    <string name="server_change_body">Cambia entre el servidor local de desarrollo y el de producción. Solo modifica esto si sabes lo que estás haciendo.</string>
 
     <!-- Emergency overlay -->
     <string name="emergency_kicker">SOS · Centro de Operaciones</string>

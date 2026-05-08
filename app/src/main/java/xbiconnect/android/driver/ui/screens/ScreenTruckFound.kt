@@ -37,14 +37,17 @@ import xbiconnect.android.driver.ui.theme.LocalAppColors
 import xbiconnect.android.driver.ui.theme.PlexMono
 
 @Composable
-fun ScreenTruckFound(onConfirm: () -> Unit, onReject: () -> Unit) {
+fun ScreenTruckFound(vin: String, onConfirm: () -> Unit, onReject: () -> Unit) {
     val c = LocalAppColors.current
+    // TODO: replace mock truck data with real lookup against XBI middleware
+    // once the VIN→truck endpoint is wired. For now we just echo the entered VIN.
+    val displayVin = if (vin.isNotEmpty()) "…$vin" else "—"
     val data = listOf(
         Triple(stringResource(R.string.field_unit), "45", DataKind.BIG),
         Triple(stringResource(R.string.field_brand), "Kenworth", DataKind.NORMAL),
         Triple(stringResource(R.string.field_model), "T680", DataKind.NORMAL),
         Triple(stringResource(R.string.field_plates), "ABC-123", DataKind.NORMAL),
-        Triple(stringResource(R.string.field_vin), "…8K7451", DataKind.SMALL_MONO),
+        Triple(stringResource(R.string.field_vin), displayVin, DataKind.SMALL_MONO),
     )
 
     Column(Modifier.fillMaxSize()) {

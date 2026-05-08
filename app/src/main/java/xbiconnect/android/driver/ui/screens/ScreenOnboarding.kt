@@ -41,9 +41,9 @@ import xbiconnect.android.driver.ui.theme.DriverPalette
 import xbiconnect.android.driver.ui.theme.LocalAppColors
 
 @Composable
-fun ScreenOnboarding(onFound: () -> Unit) {
+fun ScreenOnboarding(onFound: (String) -> Unit) {
     val c = LocalAppColors.current
-    var vin by rememberSaveable { mutableStateOf("8K74") }
+    var vin by rememberSaveable { mutableStateOf("") }
 
     Column(Modifier.fillMaxSize()) {
         SystemBar(
@@ -106,7 +106,7 @@ fun ScreenOnboarding(onFound: () -> Unit) {
                     },
                 )
                 Spacer(Modifier.height(16.dp))
-                SearchButton(onClick = onFound, enabled = vin.length == 6)
+                SearchButton(onClick = { onFound(vin) }, enabled = vin.length == 6)
             }
 
             // Vertical divider
