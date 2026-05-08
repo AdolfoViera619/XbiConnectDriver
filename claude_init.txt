@@ -1,0 +1,138 @@
+=========================================================
+ CLAUDE CODE — INICIALIZACIÓN DE SESIÓN (XbiConnectDriver)
+=========================================================
+
+Hola Claude. Este proyecto es la app DRIVER del ecosistema
+XbiConnect, enfocada a conductores. Es una extensión del agent
+app que ya construimos en una sesión paralela.
+
+Lee este archivo completo antes de responder y confirma con una
+sola línea que estás listo.
+
+---------------------------------------------------------
+ ALCANCE DE ESTA SESIÓN
+---------------------------------------------------------
+Tu única ruta de trabajo:
+  /Users/adolfoviera/Documents/XbiConnectApps/Android/XbiConnectDriver/
+
+NO tocar (otras sesiones / referencia):
+  - /Android/XbiConnect/      (app Agentes)
+  - /Ios/                     (app iOS)
+  - /Servidor/                (sólo referencia, no se deploya)
+
+Búsquedas, lecturas y ediciones se limitan a XbiConnectDriver/
+salvo que el usuario lo pida explícito.
+
+---------------------------------------------------------
+ ECOSISTEMA XbiConnect
+---------------------------------------------------------
+Tres clientes consumen el mismo backend Chatwoot v4.8.0:
+
+  1. Android Agents      → Android/XbiConnect/
+  2. iOS Agents          → Ios/XbiConnect/
+  3. Android Driver      → Android/XbiConnectDriver/   ← ESTA SESIÓN
+
+Drivers vs Agents:
+  - Driver  = conductores (logística, tracking, viajes).
+  - Agents  = customer support (gestión de tickets).
+  - Ambos comparten backend, auth (JWT/headers + Keystore),
+    modelos (Conversation, Message, User) y WebSocket.
+  - Driver tiene namespace propio: `xbiconnect.android.driver`.
+
+---------------------------------------------------------
+ STACK Y CONVENCIONES (heredadas del agent app)
+---------------------------------------------------------
+- Kotlin + Jetpack Compose (BOM 2024.04.01).
+- Material 3 + tema custom vía LocalAppColors.current
+  (con campo isLight que respeta toggle interno del app —
+  NO usar isSystemInDarkTheme directamente).
+- Coil para imágenes async.
+- Retrofit + Gson para API.
+- WebSocket via ActionCable.
+- minSdk 28, compileSdk 35.
+
+Patrones probados en agent app (consultar como referencia):
+- ViewModel con StateFlow + Resource<T> (Success/Error/Loading).
+- Repository pattern envolviendo retrofit responses.
+- Strings localizadas en strings.xml (values/ y values-es/).
+- Avatar standard: foto (Coil AsyncImage) → color server
+  (`sender.customAttributes["avatar_color"]`) → paleta
+  determinista (`getAvatarColors(name, avatarColor, isLight)`).
+- Iniciales: 2 letras canónicas vía `getInitials(name)` ("Juan
+  Pérez" → "JP", "Adolfo" → "AD").
+- Bubble shape estilo WhatsApp: birth side plano (4dp), away side
+  curvo (16dp).
+
+Si te encuentras reimplementando algo que ya existe en el agent
+app, antes de duplicar revisa si conviene COPIAR el código o
+EXTRAER a un módulo compartido (esto último requiere alinear con
+el usuario primero).
+
+---------------------------------------------------------
+ ARQUITECTURA DEL FEATURE driver_channel
+---------------------------------------------------------
+AUTH Y MODELO DE USUARIO
+- Drivers son Chatwoot Users (mismo tipo que agentes/admins).
+  NO son Contacts. Login = devise_token_auth (access-token/uid/client).
+- Cada driver tiene su User, sus credenciales, su account membership.
+- Mismo flujo de auth que el agent app — copiar AuthRepository.
+
+INBOX TYPE
+- Server agregó columna `driver_channel: boolean` en tabla inboxes.
+- Inboxes para drivers: Channel::Api con driver_channel=true.
+- API expone el flag en `/api/v1/inboxes` y dentro de
+  `meta.channel` de conversaciones.
+- Filtro: `inbox.driver_channel == true` para listar canales relevantes.
+
+ANUNCIOS MASIVOS (BROADCAST)
+- Usar Chatwoot Campaigns (no broadcast custom).
+- Endpoint: /api/v1/accounts/{id}/campaigns
+- Tipo: one_off para anuncios puntuales, ongoing para automáticos.
+
+UI EN AGENT APPS (referencia)
+- Cuando inbox.driver_channel=true, los agent apps muestran un
+  icono de camión con fondo azul #1E40AF en lugar del icono de
+  canal normal.
+- En Driver app esto NO aplica (el driver solo ve sus propias
+  conversaciones).
+
+DEV: TOGGLE DE SERVIDOR LOCAL
+- App debe tener un toggle "Use local server" en settings de
+  desarrollo que apunte al docker dev del usuario.
+- Producción: usar URL de XBI API (igual que agent app).
+
+ALCANCE INICIAL DEL DRIVER APP (sin ETA/HOS por ahora)
+- Login con email/password (Chatwoot User).
+- Ver inboxes con driver_channel=true.
+- Ver/enviar mensajes en conversaciones de esos inboxes.
+- Ver anuncios (Campaigns) destinados al driver.
+- ETA y HOS: deferred — se trabajan después.
+
+---------------------------------------------------------
+ MEMORIA Y CONTINUIDAD
+---------------------------------------------------------
+- Auto-memoria global: /Users/adolfoviera/.claude/projects/...
+- Memorias previas como "Android session scope" o "iOS session
+  scope" son del agent app. Esta sesión NO es esa.
+
+---------------------------------------------------------
+ CÓMO COLABORAR
+---------------------------------------------------------
+- Respuestas concisas en español, sin emojis.
+- Sin resúmenes largos al cierre del turno.
+- Verifica con Glob/Grep/Read antes de editar — nada de inventar
+  rutas o nombres.
+- Antes de cambios no triviales, alinea con el usuario.
+- Si una instrucción te cruzaría a /Android/XbiConnect/ o /Ios/,
+  detente y avisa.
+- Cuando el usuario pida un fix, primero VERIFICA que el bug exista
+  como lo describe. Si difiere, avisa antes de implementar.
+
+---------------------------------------------------------
+ AL TERMINAR DE LEER
+---------------------------------------------------------
+Responde SOLO con una línea tipo:
+  "Listo. Sesión Driver activa en Android/XbiConnectDriver/.
+   ¿En qué empezamos?"
+
+Y espera la siguiente instrucción.

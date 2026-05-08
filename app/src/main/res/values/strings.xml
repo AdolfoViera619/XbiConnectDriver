@@ -1,0 +1,155 @@
+<resources>
+    <string name="app_name">Xbi Connect Driver</string>
+    <string name="app_tag">Comunicación de flota</string>
+
+    <string name="onboarding_title">Vincular tableta al camión</string>
+    <string name="onboarding_sub">Ingresa los últimos 6 dígitos del VIN. Se encuentra en la placa del tablero o en el marco de la puerta del conductor.</string>
+    <string name="vin_label">Últimos 6 del VIN</string>
+    <string name="vin_help_title">¿Dónde encuentro el VIN?</string>
+    <string name="vin_help_1_title">Placa del tablero</string>
+    <string name="vin_help_1_body">Visible desde afuera del parabrisas, esquina inferior izquierda.</string>
+    <string name="vin_help_2_title">Puerta del conductor</string>
+    <string name="vin_help_2_body">Etiqueta en el marco de la puerta al abrirla.</string>
+    <string name="vin_help_3_title">Solo los últimos 6</string>
+    <string name="vin_help_3_body">VIN: 1XKYD49X8K7451\nNecesitas: 8K7451</string>
+    <string name="btn_search">Buscar camión</string>
+    <string name="setup_subtitle">Configuración inicial</string>
+    <string name="link_subtitle">Vinculación</string>
+
+    <string name="truck_found">¡Camión encontrado!</string>
+    <string name="truck_found_sub">Los datos se trajeron automáticamente del portal.</string>
+    <string name="btn_not_this">No es éste</string>
+    <string name="btn_confirm">Confirmar y vincular</string>
+    <string name="field_unit">Unidad</string>
+    <string name="field_brand">Marca</string>
+    <string name="field_model">Modelo</string>
+    <string name="field_plates">Placas</string>
+    <string name="field_vin">VIN</string>
+
+    <string name="status_parked">Estacionado · Listo para enviar</string>
+    <string name="status_moving_locked">En movimiento — Bloqueado</string>
+    <string name="simulate_drive">▶ Simular conducir</string>
+
+    <string name="trip_kicker">Viaje 2241 · Origen</string>
+    <string name="trip_dest_kicker">Destino · ETA 17:20</string>
+
+    <string name="metric_speed">Velocidad</string>
+    <string name="metric_eta">ETA</string>
+    <string name="metric_hos">HOS restantes</string>
+    <string name="metric_messages">Mensajes</string>
+    <string name="unit_kmh">km/h</string>
+    <string name="unit_hrs">hrs</string>
+    <string name="unit_unread">sin leer</string>
+
+    <string name="announcement_kicker">Comunicado · Toda la flota</string>
+    <string name="see_all">Ver todos</string>
+    <string name="dispatch_label">Dispatch · Neal R.</string>
+    <string name="dispatch_5min">hace 5 min</string>
+
+    <string name="nav_trip">Viaje</string>
+    <string name="nav_announcements">Comunicados</string>
+    <string name="nav_chat">Chat</string>
+    <string name="nav_team">Equipo</string>
+    <string name="nav_settings">Ajustes</string>
+    <string name="nav_sos">SOS</string>
+
+    <string name="theme_day">Día</string>
+    <string name="theme_night">Noche</string>
+    <string name="theme_system">Sistema</string>
+    <string name="theme_label">Tema</string>
+
+    <string name="badge_driving">Driving</string>
+    <string name="badge_sleeper">Sleeper</string>
+    <string name="badge_available">Available</string>
+    <string name="badge_off">Off</string>
+
+    <string name="eld_ok">ELD ✓</string>
+
+    <!-- Driving lock / quick replies -->
+    <string name="qr_received">Recibido</string>
+    <string name="qr_arriving">Llegando</string>
+    <string name="qr_arrived">Llegué</string>
+    <string name="qr_delayed">Retrasado</string>
+    <string name="qr_break">Voy a descansar</string>
+    <string name="qr_fueling">Cargando combustible</string>
+    <string name="quick_reply_kicker">Respuesta rápida · Toca para enviar</string>
+    <string name="voice_note">Nota de voz</string>
+    <string name="hands_free">Manos libres</string>
+    <string name="emergency">EMERGENCIA</string>
+    <string name="hold_3s">MANTÉN PRESIONADO 3s</string>
+    <string name="exit_sim">Salir sim</string>
+    <string name="dispatch">Dispatch</string>
+    <string name="confirm_arrival">Confirma hora de llegada a Monterrey.</string>
+    <string name="toast_sent">Enviado a Despacho · \"%1$s\"</string>
+
+    <!-- Chat -->
+    <string name="chat_back">Volver</string>
+    <string name="chat_header">Dispatch — Oficina</string>
+    <string name="chat_online">en línea</string>
+    <string name="chat_today">Hoy</string>
+    <string name="chat_quick_got_it">✓ Entendido</string>
+    <string name="chat_quick_arrived">✓ Llegamos</string>
+    <string name="chat_quick_delayed">⏱ Retraso</string>
+    <string name="chat_input_placeholder">Escribir mensaje…</string>
+    <string name="chat_input_team">Escribir como Roberto…</string>
+    <string name="msg_dispatch_neal">Confirma hora de llegada a Monterrey.</string>
+    <string name="msg_team_response">Estimamos llegar 5:30 PM. Carlos va manejando, yo confirmo.</string>
+    <string name="answering_as">Respondiendo: Roberto L.</string>
+
+    <!-- Voice modal -->
+    <string name="voice_recording">Grabando · Manos libres</string>
+    <string name="voice_transcript">Voy llegando a Querétaro, traigo retraso de unos veinte minutos por construcción en el kilómetro doscientos…</string>
+    <string name="cancel">Cancelar</string>
+    <string name="send_message">Enviar mensaje</string>
+
+    <!-- Team -->
+    <string name="team_drivers">Choferes en turno</string>
+    <string name="hos_24h">HOS · ÚLTIMAS 24H</string>
+    <string name="eld_sync_30s">Sync ELD · hace 30s</string>
+    <string name="hos_legend_drive">Manejando</string>
+    <string name="hos_legend_on">En servicio</string>
+    <string name="hos_legend_rest">Descanso</string>
+    <string name="team_callout">El cambio de rol es automático: cuando el ELD registra cambio de status, la tablet actualiza los roles sin intervención.</string>
+
+    <!-- Announcements -->
+    <string name="announcements_title">Comunicados</string>
+    <string name="announcements_sub">Anuncios que la oficina envía a todos los operadores con cuenta activa.</string>
+    <string name="filter_all">Todos</string>
+    <string name="filter_unread">Sin leer</string>
+    <string name="filter_pinned">Anclados</string>
+    <string name="chip_pinned">ANCLADO</string>
+    <string name="chip_urgent">URGENTE</string>
+    <string name="chip_info">AVISO</string>
+    <string name="chip_general">GENERAL</string>
+    <string name="seen_count">visto</string>
+    <string name="mark_read">Marcar leído</string>
+    <string name="announcements_callout">Los comunicados se publican desde el portal Xbi Connect. Llegan a todas las cuentas activas de la flota — los choferes no pueden responder, sólo confirmar lectura.</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Configuración</string>
+    <string name="settings_unit">Unidad</string>
+    <string name="settings_unit_value">45 · Kenworth T680 · ABC-123</string>
+    <string name="settings_driver">Chofer ELD</string>
+    <string name="settings_driver_value">Carlos Méndez · ID 4421</string>
+    <string name="settings_conn">Conexión</string>
+    <string name="settings_conn_value">LTE · sincronización activa</string>
+    <string name="settings_notif">Notificaciones</string>
+    <string name="settings_notif_value">Solo despacho y emergencia mientras manejas</string>
+    <string name="settings_display">Pantalla</string>
+    <string name="settings_display_value">Auto día/noche · 06:30 — 19:45</string>
+    <string name="settings_about">Acerca de</string>
+    <string name="settings_about_value">Xbi Connect Driver · v1.0.0</string>
+    <string name="unlink">Desvincular tableta</string>
+
+    <!-- Emergency overlay -->
+    <string name="emergency_kicker">SOS · Centro de Operaciones</string>
+    <string name="sending_alert">Enviando alerta…</string>
+    <string name="alert_sent">Alerta enviada</string>
+    <string name="emergency_sending_body">Enviando ubicación, unidad y datos del chofer al equipo de seguridad…</string>
+    <string name="emergency_sent_body">El equipo de seguridad y dispatcher fueron notificados. Mantén la calma. Llamada entrante en 30 segundos.</string>
+    <string name="emergency_call">Llamada activa · Centro Op.</string>
+    <string name="cancel_alert">Cancelar alerta</string>
+    <string name="emergency_meta_unit">UNIDAD 45 · KENWORTH T680 · ABC-123</string>
+    <string name="emergency_meta_loc">25.5934°N, 100.2671°W · MX-40D km 142</string>
+    <string name="emergency_meta_time">14:32 · 30/04/26</string>
+</resources>
