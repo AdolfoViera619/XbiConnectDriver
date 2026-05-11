@@ -17,19 +17,26 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import xbiconnect.android.driver.R
@@ -37,8 +44,10 @@ import xbiconnect.android.driver.ui.components.DriverIcon
 import xbiconnect.android.driver.ui.components.DriverIconName
 import xbiconnect.android.driver.ui.components.SystemBar
 import xbiconnect.android.driver.ui.components.ThemeToggle
-import xbiconnect.android.driver.ui.theme.DriverPalette
 import xbiconnect.android.driver.ui.theme.LocalAppColors
+import xbiconnect.android.driver.ui.theme.PlexMono
+
+private const val VIN_LENGTH = 17
 
 @Composable
 fun ScreenOnboarding(onFound: (String) -> Unit) {
@@ -90,23 +99,15 @@ fun ScreenOnboarding(onFound: (String) -> Unit) {
                     lineHeight = 21.sp,
                 )
                 Spacer(Modifier.height(22.dp))
-                Text(
-                    stringResource(R.string.vin_label),
-                    color = c.textSecondary,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 12.sp,
-                )
-                Spacer(Modifier.height(8.dp))
-                VinCells(vin)
-                Spacer(Modifier.height(18.dp))
-                Numpad(
-                    onDigit = { d ->
-                        if (d == "⌫") vin = vin.dropLast(1)
-                        else if (vin.length < 6) vin += d
+                VinInput(
+                    value = vin,
+                    onValueChange = { input ->
+                        vin = input.uppercase().filter { it.isLetterOrDigit() }.take(VIN_LENGTH)
                     },
+                    onSubmit = { if (vin.length == VIN_LENGTH) onFound(vin) },
                 )
-                Spacer(Modifier.height(16.dp))
-                SearchButton(onClick = { onFound(vin) }, enabled = vin.length == 6)
+                Spacer(Modifier.height(18.dp))
+                SearchButton(onClick = { onFound(vin) }, enabled = vin.length == VIN_LENGTH)
             }
 
             // Vertical divider
@@ -150,62 +151,62 @@ fun ScreenOnboarding(onFound: (String) -> Unit) {
 }
 
 @Composable
-private fun VinCells(vin: String) {
+private fun VinInput(value: String, onValueChange: (String) -> Unit, onSubmit: () -> Unit) {
     val c = LocalAppColors.current
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        repeat(6) { i ->
-            val filled = i < vin.length
-            val char = if (filled) vin[i].toString() else "_"
-            Box(
-                Modifier
-                    .size(width = 56.dp, height = 64.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(c.canvas)
-                    .border(
-                        width = 2.5.dp,
-                        color = if (filled) DriverPalette.Navy else c.border,
-                        shape = RoundedCornerShape(12.dp),
-                    ),
-                contentAlignment = Alignment.Center,
-            ) {
+    Column {
+        OutlinedTextField(
+            value = value,
+            onValueChange = onValueChange,
+            placeholder = {
                 Text(
-                    char,
-                    color = if (filled) DriverPalette.Navy else c.border,
-                    fontWeight = FontWeight.ExtraBold,
-                    fontSize = 30.sp,
+                    stringResource(R.string.vin_placeholder),
+                    color = c.textFaint,
+                    fontFamily = PlexMono,
                 )
-            }
-        }
-    }
-}
-
-@Composable
-private fun Numpad(onDigit: (String) -> Unit) {
-    val c = LocalAppColors.current
-    val rows = listOf(
-        listOf("1", "2", "3"),
-        listOf("4", "5", "6"),
-        listOf("7", "8", "9"),
-        listOf("K", "0", "⌫"),
-    )
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        rows.forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                row.forEach { k ->
-                    Box(
-                        Modifier
-                            .height(52.dp)
-                            .width(64.dp)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(c.surfaceSoft)
-                            .border(1.5.dp, c.line, RoundedCornerShape(10.dp))
-                            .clickable { onDigit(k) },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(k, color = c.text, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
+            },
+            singleLine = true,
+            textStyle = TextStyle(
+                fontFamily = PlexMono,
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold,
+                color = c.text,
+                letterSpacing = 2.sp,
+            ),
+            keyboardOptions = KeyboardOptions(
+                capitalization = KeyboardCapitalization.Characters,
+                autoCorrectEnabled = false,
+                keyboardType = KeyboardType.Ascii,
+                imeAction = ImeAction.Done,
+            ),
+            keyboardActions = KeyboardActions(onDone = { onSubmit() }),
+            shape = RoundedCornerShape(14.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = c.brand,
+                unfocusedBorderColor = c.border,
+                focusedContainerColor = c.surfaceSoft,
+                unfocusedContainerColor = c.surfaceSoft,
+                cursorColor = c.brand,
+            ),
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(Modifier.height(6.dp))
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                stringResource(R.string.vin_label),
+                color = c.textMute,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                stringResource(R.string.vin_counter, value.length),
+                color = if (value.length == VIN_LENGTH) c.go else c.textMute,
+                fontSize = 11.sp,
+                fontFamily = PlexMono,
+                fontWeight = FontWeight.Bold,
+            )
         }
     }
 }

@@ -3,15 +3,17 @@
     <string name="app_tag">Fleet communication</string>
 
     <string name="onboarding_title">Link tablet to truck</string>
-    <string name="onboarding_sub">Enter the last 6 digits of the VIN. You\'ll find it on the dash plate or the driver door frame.</string>
-    <string name="vin_label">Last 6 of VIN</string>
+    <string name="onboarding_sub">Enter the full VIN (17 characters). You only do this once — after pairing, the tablet opens straight to the app.</string>
+    <string name="vin_label">Truck VIN</string>
+    <string name="vin_placeholder">e.g. 1XKYD49X8K745112</string>
+    <string name="vin_counter">%1$d / 17</string>
     <string name="vin_help_title">Where do I find the VIN?</string>
     <string name="vin_help_1_title">Dash plate</string>
     <string name="vin_help_1_body">Visible from outside the windshield, lower-left corner.</string>
     <string name="vin_help_2_title">Driver\'s door</string>
     <string name="vin_help_2_body">Sticker on the door frame when you open it.</string>
-    <string name="vin_help_3_title">Just the last 6</string>
-    <string name="vin_help_3_body">VIN: 1XKYD49X8K7451\nYou need: 8K7451</string>
+    <string name="vin_help_3_title">17 alphanumeric characters</string>
+    <string name="vin_help_3_body">The VIN is the unique combination of letters and numbers identifying the truck. Example: 1XKYD49X8K745112</string>
     <string name="btn_search">Find truck</string>
     <string name="setup_subtitle">Initial setup</string>
     <string name="link_subtitle">Linking</string>

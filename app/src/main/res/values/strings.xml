@@ -3,15 +3,17 @@
     <string name="app_tag">Comunicación de flota</string>
 
     <string name="onboarding_title">Vincular tableta al camión</string>
-    <string name="onboarding_sub">Ingresa los últimos 6 dígitos del VIN. Se encuentra en la placa del tablero o en el marco de la puerta del conductor.</string>
-    <string name="vin_label">Últimos 6 del VIN</string>
+    <string name="onboarding_sub">Ingresa el VIN completo del camión (17 caracteres). Solo se pide una vez — después la tableta queda enlazada y abre directo.</string>
+    <string name="vin_label">VIN del camión</string>
+    <string name="vin_placeholder">Ej. 1XKYD49X8K745112</string>
+    <string name="vin_counter">%1$d / 17</string>
     <string name="vin_help_title">¿Dónde encuentro el VIN?</string>
     <string name="vin_help_1_title">Placa del tablero</string>
     <string name="vin_help_1_body">Visible desde afuera del parabrisas, esquina inferior izquierda.</string>
     <string name="vin_help_2_title">Puerta del conductor</string>
     <string name="vin_help_2_body">Etiqueta en el marco de la puerta al abrirla.</string>
-    <string name="vin_help_3_title">Solo los últimos 6</string>
-    <string name="vin_help_3_body">VIN: 1XKYD49X8K7451\nNecesitas: 8K7451</string>
+    <string name="vin_help_3_title">17 caracteres alfanuméricos</string>
+    <string name="vin_help_3_body">El VIN es la combinación única de letras y números que identifica al camión. Ejemplo: 1XKYD49X8K745112</string>
     <string name="btn_search">Buscar camión</string>
     <string name="setup_subtitle">Configuración inicial</string>
     <string name="link_subtitle">Vinculación</string>
