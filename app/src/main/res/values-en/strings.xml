@@ -33,7 +33,7 @@
     <string name="simulate_drive">▶ Simulate driving</string>
 
     <string name="trip_kicker">Trip 2241 · Origin</string>
-    <string name="trip_dest_kicker">Destination · ETA 17:20</string>
+    <string name="trip_dest_kicker">Destination</string>
 
     <string name="metric_speed">Speed</string>
     <string name="metric_eta">ETA</string>

@@ -33,7 +33,7 @@
     <string name="simulate_drive">▶ Simular conducir</string>
 
     <string name="trip_kicker">Viaje 2241 · Origen</string>
-    <string name="trip_dest_kicker">Destino · ETA 17:20</string>
+    <string name="trip_dest_kicker">Destino</string>
 
     <string name="metric_speed">Velocidad</string>
     <string name="metric_eta">ETA</string>

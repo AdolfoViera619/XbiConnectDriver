@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -29,11 +28,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import xbiconnect.android.driver.R
-import xbiconnect.android.driver.ui.components.DriverBadge
 import xbiconnect.android.driver.ui.components.DriverIcon
 import xbiconnect.android.driver.ui.components.DriverIconName
-import xbiconnect.android.driver.ui.components.DriverStatus
-import xbiconnect.android.driver.ui.components.MetricCard
 import xbiconnect.android.driver.ui.components.ParkedBanner
 import xbiconnect.android.driver.ui.components.SystemBar
 import xbiconnect.android.driver.ui.theme.LocalAppColors
@@ -50,14 +46,6 @@ fun ScreenTrip(
             title = "XBI Connect",
             unit = "Unidad 45",
             right = {
-                DriverBadge(status = DriverStatus.AVAILABLE, name = "Carlos Méndez", compact = true)
-                Spacer(Modifier.width(8.dp))
-                Box(Modifier.size(width = 1.dp, height = 12.dp).background(c.textFaint))
-                Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.eld_ok), color = c.textMute, fontSize = 10.sp)
-                Spacer(Modifier.width(8.dp))
-                Box(Modifier.size(width = 1.dp, height = 12.dp).background(c.textFaint))
-                Spacer(Modifier.width(8.dp))
                 Text("14:32", color = c.textMute, fontSize = 10.sp)
             },
         )
@@ -76,7 +64,6 @@ fun ScreenTrip(
                 simulateLabel = stringResource(R.string.simulate_drive),
             )
             TripRouteCard()
-            MetricsRow()
             AnnouncementPinnedCard(onOpen = onOpenAnnouncement)
             LastMessageCard(onOpen = onOpenChat)
         }
@@ -123,48 +110,6 @@ private fun TripRouteCard() {
             Text("Ciudad de México", color = c.text, fontWeight = FontWeight.Bold, fontSize = 15.sp)
             Text("Almacén Vallejo", color = c.textMute, fontSize = 11.sp)
         }
-    }
-}
-
-@Composable
-private fun MetricsRow() {
-    val c = LocalAppColors.current
-    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        MetricCard(
-            label = stringResource(R.string.metric_speed),
-            value = "0",
-            unit = stringResource(R.string.unit_kmh),
-            big = true,
-            mono = true,
-            accent = c.textMute,
-            modifier = Modifier.weight(1f),
-        )
-        MetricCard(
-            label = stringResource(R.string.metric_eta),
-            value = "2:45",
-            unit = stringResource(R.string.unit_hrs),
-            big = true,
-            mono = true,
-            modifier = Modifier.weight(1f),
-        )
-        MetricCard(
-            label = stringResource(R.string.metric_hos),
-            value = "3:20",
-            unit = stringResource(R.string.unit_hrs),
-            big = true,
-            mono = true,
-            accent = c.warn,
-            modifier = Modifier.weight(1f),
-        )
-        MetricCard(
-            label = stringResource(R.string.metric_messages),
-            value = "2",
-            unit = stringResource(R.string.unit_unread),
-            big = true,
-            mono = true,
-            accent = c.info,
-            modifier = Modifier.weight(1f),
-        )
     }
 }
 
