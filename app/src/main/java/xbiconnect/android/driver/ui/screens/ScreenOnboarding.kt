@@ -20,10 +20,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -40,6 +42,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import xbiconnect.android.driver.R
+import xbiconnect.android.driver.data.state.PairingState
 import xbiconnect.android.driver.ui.components.DriverIcon
 import xbiconnect.android.driver.ui.components.DriverIconName
 import xbiconnect.android.driver.ui.components.SystemBar
@@ -50,9 +53,19 @@ import xbiconnect.android.driver.ui.theme.PlexMono
 private const val VIN_LENGTH = 17
 
 @Composable
-fun ScreenOnboarding(onFound: (String) -> Unit) {
+fun ScreenOnboarding(
+    pairingState: PairingState,
+    onSearch: (String) -> Unit,
+    onClearError: () -> Unit,
+) {
     val c = LocalAppColors.current
     var vin by rememberSaveable { mutableStateOf("") }
+    val isLoading = pairingState is PairingState.Loading
+
+    // Auto-dismiss inline error after edit
+    LaunchedEffect(vin) {
+        if (pairingState is PairingState.Error) onClearError()
+    }
 
     Column(Modifier.fillMaxSize()) {
         SystemBar(
@@ -68,7 +81,6 @@ fun ScreenOnboarding(onFound: (String) -> Unit) {
                 .background(c.tabBg)
                 .padding(28.dp),
         ) {
-            // Left — VIN input
             Column(
                 Modifier
                     .weight(1f)
@@ -101,16 +113,24 @@ fun ScreenOnboarding(onFound: (String) -> Unit) {
                 Spacer(Modifier.height(22.dp))
                 VinInput(
                     value = vin,
+                    enabled = !isLoading,
                     onValueChange = { input ->
                         vin = input.uppercase().filter { it.isLetterOrDigit() }.take(VIN_LENGTH)
                     },
-                    onSubmit = { if (vin.length == VIN_LENGTH) onFound(vin) },
+                    onSubmit = { if (vin.length == VIN_LENGTH && !isLoading) onSearch(vin) },
                 )
+                if (pairingState is PairingState.Error) {
+                    Spacer(Modifier.height(10.dp))
+                    ErrorBanner(pairingState.message)
+                }
                 Spacer(Modifier.height(18.dp))
-                SearchButton(onClick = { onFound(vin) }, enabled = vin.length == VIN_LENGTH)
+                SearchButton(
+                    onClick = { onSearch(vin) },
+                    enabled = vin.length == VIN_LENGTH && !isLoading,
+                    isLoading = isLoading,
+                )
             }
 
-            // Vertical divider
             Box(
                 Modifier
                     .width(1.dp)
@@ -119,7 +139,6 @@ fun ScreenOnboarding(onFound: (String) -> Unit) {
             )
             Spacer(Modifier.width(28.dp))
 
-            // Right — Help
             Column(Modifier.width(280.dp).verticalScroll(rememberScrollState())) {
                 Text(
                     stringResource(R.string.vin_help_title),
@@ -151,12 +170,18 @@ fun ScreenOnboarding(onFound: (String) -> Unit) {
 }
 
 @Composable
-private fun VinInput(value: String, onValueChange: (String) -> Unit, onSubmit: () -> Unit) {
+private fun VinInput(
+    value: String,
+    enabled: Boolean,
+    onValueChange: (String) -> Unit,
+    onSubmit: () -> Unit,
+) {
     val c = LocalAppColors.current
     Column {
         OutlinedTextField(
             value = value,
             onValueChange = onValueChange,
+            enabled = enabled,
             placeholder = {
                 Text(
                     stringResource(R.string.vin_placeholder),
@@ -212,7 +237,25 @@ private fun VinInput(value: String, onValueChange: (String) -> Unit, onSubmit: (
 }
 
 @Composable
-private fun SearchButton(onClick: () -> Unit, enabled: Boolean) {
+private fun ErrorBanner(message: String) {
+    val c = LocalAppColors.current
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(c.stopBg)
+            .border(1.dp, c.stopBorder, RoundedCornerShape(10.dp))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        DriverIcon(DriverIconName.ALERT, size = 16.dp, color = c.stop, strokeWidth = 2.dp)
+        Spacer(Modifier.width(8.dp))
+        Text(message, color = c.stop, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+@Composable
+private fun SearchButton(onClick: () -> Unit, enabled: Boolean, isLoading: Boolean) {
     val c = LocalAppColors.current
     Row(
         Modifier
@@ -222,7 +265,15 @@ private fun SearchButton(onClick: () -> Unit, enabled: Boolean) {
             .padding(horizontal = 28.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        DriverIcon(DriverIconName.SEARCH, size = 18.dp, color = c.brandOn, strokeWidth = 2.dp)
+        if (isLoading) {
+            CircularProgressIndicator(
+                color = c.brandOn,
+                strokeWidth = 2.dp,
+                modifier = Modifier.size(18.dp),
+            )
+        } else {
+            DriverIcon(DriverIconName.SEARCH, size = 18.dp, color = c.brandOn, strokeWidth = 2.dp)
+        }
         Spacer(Modifier.width(8.dp))
         Text(stringResource(R.string.btn_search), color = c.brandOn, fontWeight = FontWeight.Bold, fontSize = 15.sp)
     }

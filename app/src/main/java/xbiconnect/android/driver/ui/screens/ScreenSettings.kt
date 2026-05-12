@@ -54,6 +54,7 @@ fun ScreenSettings(onUnlink: () -> Unit) {
     val prefs = LocalDriverPreferences.current
     val scope = rememberCoroutineScope()
     val savedVin by prefs.vin.collectAsState(initial = null)
+    val paired by prefs.pairedVehicle.collectAsState(initial = null)
     val serverMode by prefs.serverMode.collectAsState(initial = ServerMode.PROD)
 
     var showUnlinkDialog by remember { mutableStateOf(false) }
@@ -69,12 +70,19 @@ fun ScreenSettings(onUnlink: () -> Unit) {
         ServerMode.PROD -> stringResource(R.string.server_prod)
     }
 
+    val unitDescription = paired?.let { p ->
+        val parts = listOfNotNull(p.label, p.make, p.model).filter { it.isNotBlank() }
+        if (parts.isEmpty()) "—" else parts.joinToString(" · ")
+    } ?: "—"
+    val customerDescription = paired?.customerName?.takeIf { it.isNotBlank() } ?: "—"
+
     val items = listOf(
-        SettingItem(DriverIconName.TRUCK, stringResource(R.string.settings_unit), stringResource(R.string.settings_unit_value)),
+        SettingItem(DriverIconName.TRUCK, stringResource(R.string.settings_unit), unitDescription),
+        SettingItem(DriverIconName.USERS, "Empresa", customerDescription),
         SettingItem(
             icon = DriverIconName.LOCK,
             label = stringResource(R.string.settings_vin),
-            value = savedVin?.let { "…$it" } ?: "—",
+            value = savedVin?.let { "…" + it.takeLast(6) } ?: "—",
             valueMono = true,
         ),
         SettingItem(DriverIconName.WIFI, stringResource(R.string.settings_conn), stringResource(R.string.settings_conn_value)),

@@ -23,6 +23,13 @@ import kotlinx.coroutines.launch
 import xbiconnect.android.driver.R
 import xbiconnect.android.driver.data.DriverPreferences
 import xbiconnect.android.driver.data.LocalDriverPreferences
+import xbiconnect.android.driver.data.PairedVehicle
+import xbiconnect.android.driver.data.Resource
+import xbiconnect.android.driver.data.network.ApiClient
+import xbiconnect.android.driver.data.repository.DriversRepository
+import xbiconnect.android.driver.data.repository.VehiclePairingRepository
+import xbiconnect.android.driver.data.state.DriverState
+import xbiconnect.android.driver.data.state.PairingState
 import xbiconnect.android.driver.ui.components.DriverIconName
 import xbiconnect.android.driver.ui.components.QuickToast
 import xbiconnect.android.driver.ui.components.RailItem
@@ -44,6 +51,8 @@ import xbiconnect.android.driver.ui.theme.LocalThemeController
 import xbiconnect.android.driver.ui.theme.ThemeController
 import xbiconnect.android.driver.ui.theme.ThemeMode
 import xbiconnect.android.driver.ui.theme.XbiConnectDriverTheme
+
+private const val DRIVER_REFRESH_INTERVAL_MS = 30_000L
 
 @Composable
 fun AppRoot() {
@@ -71,24 +80,39 @@ private fun DriverApp() {
     val c = LocalAppColors.current
     val prefs = LocalDriverPreferences.current
     val scope = rememberCoroutineScope()
-    val savedVin by prefs.vin.collectAsState(initial = INITIAL)
 
-    // Stage: derived from saved VIN once loaded.
-    // Until DataStore yields, we render nothing meaningful (sentinel = INITIAL).
-    var pendingVin by rememberSaveable { mutableStateOf<String?>(null) }
+    val pairingRepo = remember { VehiclePairingRepository(ApiClient.mainApi) }
+    val driversRepo = remember { DriversRepository(ApiClient.mainApi) }
+
+    val paired by prefs.pairedVehicle.collectAsState(initial = INITIAL_VEHICLE)
+
+    var pairingState by remember { mutableStateOf<PairingState>(PairingState.Idle) }
     var stage by rememberSaveable { mutableStateOf<Stage?>(null) }
-
-    LaunchedEffect(savedVin) {
-        if (savedVin === INITIAL) return@LaunchedEffect
-        if (stage == null) {
-            stage = if (savedVin.isNullOrBlank()) Stage.ONBOARD else Stage.APP
-        }
-    }
-
     var section by rememberSaveable { mutableStateOf(Section.HOME) }
     var isMoving by rememberSaveable { mutableStateOf(false) }
     var emergency by rememberSaveable { mutableStateOf(false) }
     var toast by remember { mutableStateOf<String?>(null) }
+    var driverState by remember { mutableStateOf<DriverState>(DriverState.Loading) }
+
+    // Resolve the initial stage from persisted state. Sentinel guards against
+    // running before DataStore has emitted (would briefly flash the wrong screen).
+    LaunchedEffect(paired) {
+        if (paired === INITIAL_VEHICLE) return@LaunchedEffect
+        if (stage == null) {
+            stage = if (paired == null) Stage.ONBOARD else Stage.APP
+        }
+    }
+
+    // Refresh driver info while in the app shell. Uses a polling loop bound to
+    // the paired VIN so it stops automatically on unlink.
+    LaunchedEffect(stage, paired?.vin) {
+        val vin = paired?.vin
+        if (stage != Stage.APP || vin.isNullOrBlank()) return@LaunchedEffect
+        while (true) {
+            driverState = resolveDriverState(driversRepo.driversByVin(vin))
+            delay(DRIVER_REFRESH_INTERVAL_MS)
+        }
+    }
 
     LaunchedEffect(toast) {
         if (toast != null) {
@@ -100,25 +124,52 @@ private fun DriverApp() {
     Box(Modifier.fillMaxSize().background(c.pageBg)) {
         TabletFrame {
             when (stage) {
-                null -> { /* loading state — DataStore not yet read */ }
-                Stage.ONBOARD -> ScreenOnboarding(onFound = { vin ->
-                    pendingVin = vin
-                    stage = Stage.FOUND
-                })
-                Stage.FOUND -> ScreenTruckFound(
-                    vin = pendingVin ?: "",
-                    onConfirm = {
+                null -> { /* waiting for DataStore to emit */ }
+                Stage.ONBOARD -> ScreenOnboarding(
+                    pairingState = pairingState,
+                    onSearch = { vin ->
+                        pairingState = PairingState.Loading
                         scope.launch {
-                            pendingVin?.let { prefs.setVin(it) }
-                            stage = Stage.APP
-                            pendingVin = null
+                            pairingState = resolvePairingResult(
+                                pairingRepo.validateVin(vin)
+                            )
+                            if (pairingState is PairingState.Found) {
+                                stage = Stage.FOUND
+                            }
                         }
                     },
-                    onReject = {
-                        pendingVin = null
-                        stage = Stage.ONBOARD
-                    },
+                    onClearError = { pairingState = PairingState.Idle },
                 )
+                Stage.FOUND -> {
+                    val found = pairingState as? PairingState.Found
+                    if (found == null) {
+                        // Defensive: somehow landed on FOUND without a payload — bounce back.
+                        LaunchedEffect(Unit) { stage = Stage.ONBOARD }
+                    } else {
+                        ScreenTruckFound(
+                            response = found.response,
+                            onConfirm = {
+                                scope.launch {
+                                    val resp = found.response
+                                    prefs.savePairing(
+                                        vin = resp.vehicle?.vin ?: "",
+                                        vehicle = resp.vehicle,
+                                        customer = resp.customer,
+                                        instanceUrl = resp.instanceUrl,
+                                        database = resp.database,
+                                    )
+                                    pairingState = PairingState.Idle
+                                    driverState = DriverState.Loading
+                                    stage = Stage.APP
+                                }
+                            },
+                            onReject = {
+                                pairingState = PairingState.Idle
+                                stage = Stage.ONBOARD
+                            },
+                        )
+                    }
+                }
                 Stage.APP -> {
                     if (isMoving) {
                         val sentText = stringResource(R.string.toast_sent)
@@ -137,9 +188,12 @@ private fun DriverApp() {
                             onSection = { section = it },
                             onSimulateDrive = { isMoving = true },
                             onEmergency = { emergency = true },
+                            paired = paired,
+                            driverState = driverState,
                             onUnlink = {
                                 scope.launch {
-                                    prefs.clearVin()
+                                    prefs.clearPairing()
+                                    driverState = DriverState.Loading
                                     section = Section.HOME
                                     stage = Stage.ONBOARD
                                 }
@@ -162,6 +216,8 @@ private fun AppShell(
     onSection: (Section) -> Unit,
     onSimulateDrive: () -> Unit,
     onEmergency: () -> Unit,
+    paired: PairedVehicle?,
+    driverState: DriverState,
     onUnlink: () -> Unit,
 ) {
     val items = listOf(
@@ -185,6 +241,8 @@ private fun AppShell(
                     onOpenChat = { onSection(Section.CHAT) },
                     onOpenAnnouncement = { onSection(Section.ANNOUNCEMENTS) },
                     onSimulateDrive = onSimulateDrive,
+                    paired = paired,
+                    driverState = driverState,
                 )
                 Section.ANNOUNCEMENTS -> ScreenAnnouncements()
                 Section.CHAT -> ScreenChat(
@@ -198,5 +256,40 @@ private fun AppShell(
     }
 }
 
-// Sentinel used to distinguish "DataStore not yet emitted" from "no VIN saved".
-private val INITIAL: String? = "__INITIAL_SENTINEL__"
+private fun resolvePairingResult(
+    result: Resource<xbiconnect.android.driver.data.api.dto.ValidateVinResponse>,
+): PairingState = when (result) {
+    is Resource.Success -> {
+        val r = result.data
+        if (r.success && r.vehicle != null) {
+            PairingState.Found(r)
+        } else {
+            PairingState.Error(r.message ?: "VIN no encontrado.")
+        }
+    }
+    is Resource.Error -> PairingState.Error(result.message)
+    Resource.Idle, Resource.Loading -> PairingState.Loading
+}
+
+private fun resolveDriverState(
+    result: Resource<xbiconnect.android.driver.data.api.dto.DriversByVinResponse>,
+): DriverState = when (result) {
+    is Resource.Success -> {
+        val r = result.data
+        when {
+            !r.success -> DriverState.NoData(r.message)
+            r.drivers?.main != null -> DriverState.Active(r.drivers.main, r.drivers.coDriver)
+            else -> DriverState.NoData(r.message)
+        }
+    }
+    is Resource.Error -> DriverState.Error(result.message)
+    Resource.Idle, Resource.Loading -> DriverState.Loading
+}
+
+// Sentinel: collectAsState's initial value reference is used to distinguish
+// "DataStore not yet emitted" from "no pairing saved".
+private val INITIAL_VEHICLE: PairedVehicle? = PairedVehicle(
+    vin = "__INITIAL__", vehicleId = null, label = null, make = null, model = null,
+    year = null, driveLine = null, engine = null, customerId = null, customerName = null,
+    customerLogoUrl = null, instanceUrl = null, apiToken = null, database = null,
+)

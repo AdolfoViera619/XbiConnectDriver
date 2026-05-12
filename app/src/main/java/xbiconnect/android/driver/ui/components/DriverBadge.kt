@@ -23,6 +23,23 @@ import xbiconnect.android.driver.ui.theme.LocalAppColors
 
 enum class DriverStatus { DRIVING, SLEEPER, AVAILABLE, OFF }
 
+/**
+ * Maps the raw ELD duty status code to a [DriverStatus] for visual styling.
+ * Server-side `current_duty_status_label` should be passed separately to
+ * [DriverBadge.label] so the wording on screen matches what the backend chose.
+ *
+ * Codes seen so far: `D` (Driving), `OFF` (Off Duty), `SB` (Sleeper Berth).
+ * `ON` (On Duty) is part of the ELD standard but hasn't been observed yet —
+ * mapped to AVAILABLE which uses the info-blue palette.
+ */
+fun driverStatusFromCode(code: String?): DriverStatus = when (code?.uppercase()) {
+    "D" -> DriverStatus.DRIVING
+    "ON" -> DriverStatus.AVAILABLE
+    "OFF" -> DriverStatus.OFF
+    "SB" -> DriverStatus.SLEEPER
+    else -> DriverStatus.OFF
+}
+
 private data class BadgeStyle(val bg: Color, val border: Color, val fg: Color, val dot: Color, val label: String)
 
 @Composable
@@ -40,9 +57,11 @@ private fun styleFor(s: DriverStatus): BadgeStyle {
 fun DriverBadge(
     status: DriverStatus,
     name: String? = null,
+    label: String? = null,
     compact: Boolean = false,
 ) {
     val s = styleFor(status)
+    val displayLabel = label?.takeIf { it.isNotBlank() } ?: s.label
     Row(
         Modifier
             .clip(RoundedCornerShape(8.dp))
@@ -62,7 +81,7 @@ fun DriverBadge(
         )
         Spacer(Modifier.width(6.dp))
         Text(
-            text = if (name != null) "$name — ${s.label}" else s.label,
+            text = if (name != null) "$name — $displayLabel" else displayLabel,
             color = s.fg,
             fontSize = if (compact) 9.sp else 10.sp,
             fontWeight = FontWeight.Bold,

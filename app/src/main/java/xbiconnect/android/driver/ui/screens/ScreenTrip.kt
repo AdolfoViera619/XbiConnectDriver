@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -28,10 +29,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import xbiconnect.android.driver.R
+import xbiconnect.android.driver.data.PairedVehicle
+import xbiconnect.android.driver.data.state.DriverState
+import xbiconnect.android.driver.ui.components.DriverBadge
 import xbiconnect.android.driver.ui.components.DriverIcon
 import xbiconnect.android.driver.ui.components.DriverIconName
 import xbiconnect.android.driver.ui.components.ParkedBanner
 import xbiconnect.android.driver.ui.components.SystemBar
+import xbiconnect.android.driver.ui.components.driverStatusFromCode
 import xbiconnect.android.driver.ui.theme.LocalAppColors
 
 @Composable
@@ -39,14 +44,18 @@ fun ScreenTrip(
     onOpenChat: () -> Unit,
     onOpenAnnouncement: () -> Unit,
     onSimulateDrive: () -> Unit,
+    paired: PairedVehicle?,
+    driverState: DriverState,
 ) {
     val c = LocalAppColors.current
+    val unitLabel = paired?.label?.takeIf { it.isNotBlank() }?.let { "Unidad $it" }
+
     Column(Modifier.fillMaxSize()) {
         SystemBar(
             title = "XBI Connect",
-            unit = "Unidad 45",
+            unit = unitLabel,
             right = {
-                Text("14:32", color = c.textMute, fontSize = 10.sp)
+                DriverHeaderSlot(driverState = driverState)
             },
         )
         Column(
@@ -66,6 +75,48 @@ fun ScreenTrip(
             TripRouteCard()
             AnnouncementPinnedCard(onOpen = onOpenAnnouncement)
             LastMessageCard(onOpen = onOpenChat)
+        }
+    }
+}
+
+@Composable
+private fun DriverHeaderSlot(driverState: DriverState) {
+    val c = LocalAppColors.current
+    when (driverState) {
+        is DriverState.Loading -> {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                CircularProgressIndicator(
+                    strokeWidth = 1.5.dp,
+                    color = c.textMute,
+                    modifier = Modifier.size(12.dp),
+                )
+                Spacer(Modifier.width(6.dp))
+                Text("Cargando…", color = c.textMute, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+            }
+        }
+        is DriverState.Active -> {
+            val d = driverState.main
+            DriverBadge(
+                status = driverStatusFromCode(d.statusCode),
+                name = d.name,
+                label = d.statusLabel,
+                compact = true,
+            )
+        }
+        is DriverState.NoData -> {
+            Text(
+                "Sin chofer asignado",
+                color = c.textMute,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+        is DriverState.Error -> {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                DriverIcon(DriverIconName.ALERT, size = 12.dp, color = c.warn, strokeWidth = 2.dp)
+                Spacer(Modifier.width(4.dp))
+                Text("Sin sincronizar", color = c.warn, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+            }
         }
     }
 }

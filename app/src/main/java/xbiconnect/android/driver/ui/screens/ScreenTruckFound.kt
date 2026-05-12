@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -27,6 +26,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import xbiconnect.android.driver.R
+import xbiconnect.android.driver.data.api.dto.ValidateVinResponse
 import xbiconnect.android.driver.ui.components.DriverButton
 import xbiconnect.android.driver.ui.components.DriverButtonVariant
 import xbiconnect.android.driver.ui.components.DriverIcon
@@ -37,18 +37,28 @@ import xbiconnect.android.driver.ui.theme.LocalAppColors
 import xbiconnect.android.driver.ui.theme.PlexMono
 
 @Composable
-fun ScreenTruckFound(vin: String, onConfirm: () -> Unit, onReject: () -> Unit) {
+fun ScreenTruckFound(
+    response: ValidateVinResponse,
+    onConfirm: () -> Unit,
+    onReject: () -> Unit,
+) {
     val c = LocalAppColors.current
-    // TODO: replace mock truck data with real lookup against XBI middleware
-    // once the VIN→truck endpoint is wired. For now we just echo the entered VIN.
-    val displayVin = if (vin.isNotEmpty()) "…$vin" else "—"
-    val data = listOf(
-        Triple(stringResource(R.string.field_unit), "45", DataKind.BIG),
-        Triple(stringResource(R.string.field_brand), "Kenworth", DataKind.NORMAL),
-        Triple(stringResource(R.string.field_model), "T680", DataKind.NORMAL),
-        Triple(stringResource(R.string.field_plates), "ABC-123", DataKind.NORMAL),
-        Triple(stringResource(R.string.field_vin), displayVin, DataKind.SMALL_MONO),
-    )
+    val vehicle = response.vehicle
+    val customer = response.customer
+
+    val tiles = buildList {
+        vehicle?.label?.takeIf { it.isNotBlank() }
+            ?.let { add(DataTile(stringResource(R.string.field_unit), it, DataKind.BIG)) }
+        vehicle?.make?.takeIf { it.isNotBlank() }
+            ?.let { add(DataTile(stringResource(R.string.field_brand), it, DataKind.NORMAL)) }
+        vehicle?.model?.takeIf { it.isNotBlank() }
+            ?.let { add(DataTile(stringResource(R.string.field_model), it, DataKind.NORMAL)) }
+        vehicle?.year?.takeIf { it.isNotBlank() }
+            ?.let { add(DataTile("Año", it, DataKind.NORMAL)) }
+        vehicle?.vin?.takeIf { it.length >= 6 }?.let {
+            add(DataTile(stringResource(R.string.field_vin), "…" + it.takeLast(6), DataKind.SMALL_MONO))
+        }
+    }
 
     Column(Modifier.fillMaxSize()) {
         SystemBar(
@@ -66,7 +76,7 @@ fun ScreenTruckFound(vin: String, onConfirm: () -> Unit, onReject: () -> Unit) {
             contentAlignment = Alignment.Center,
         ) {
             Column(
-                Modifier.widthIn(max = 720.dp),
+                Modifier.widthIn(max = 760.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Box(
@@ -92,12 +102,29 @@ fun ScreenTruckFound(vin: String, onConfirm: () -> Unit, onReject: () -> Unit) {
                     color = c.textMute,
                     fontSize = 14.sp,
                 )
+                if (!customer?.contact.isNullOrBlank()) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        customer.contact!!,
+                        color = c.textSecondary,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
                 Spacer(Modifier.height(28.dp))
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    data.forEach { (k, v, kind) -> DataTile(k, v, kind) }
+                if (tiles.isEmpty()) {
+                    Text(
+                        "Sin datos del vehículo",
+                        color = c.textMute,
+                        fontSize = 14.sp,
+                    )
+                } else {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        tiles.forEach { it.Render() }
+                    }
                 }
                 Spacer(Modifier.height(28.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -120,36 +147,38 @@ fun ScreenTruckFound(vin: String, onConfirm: () -> Unit, onReject: () -> Unit) {
 
 private enum class DataKind { BIG, NORMAL, SMALL_MONO }
 
-@Composable
-private fun DataTile(key: String, value: String, kind: DataKind) {
-    val c = LocalAppColors.current
-    Column(
-        Modifier
-            .widthIn(min = 120.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(c.surfaceSoft)
-            .border(1.5.dp, c.line, RoundedCornerShape(12.dp))
-            .padding(horizontal = 20.dp, vertical = 14.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(
-            key.uppercase(),
-            color = c.textMute,
-            fontSize = 9.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 0.5.sp,
-        )
-        Spacer(Modifier.height(4.dp))
-        when (kind) {
-            DataKind.BIG -> Text(value, color = c.text, fontWeight = FontWeight.ExtraBold, fontSize = 28.sp)
-            DataKind.NORMAL -> Text(value, color = c.text, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
-            DataKind.SMALL_MONO -> Text(
-                value,
+private data class DataTile(val key: String, val value: String, val kind: DataKind) {
+    @Composable
+    fun Render() {
+        val c = LocalAppColors.current
+        Column(
+            Modifier
+                .widthIn(min = 120.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(c.surfaceSoft)
+                .border(1.5.dp, c.line, RoundedCornerShape(12.dp))
+                .padding(horizontal = 20.dp, vertical = 14.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                key.uppercase(),
                 color = c.textMute,
-                fontWeight = FontWeight.ExtraBold,
-                fontSize = 14.sp,
-                fontFamily = PlexMono,
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.5.sp,
             )
+            Spacer(Modifier.height(4.dp))
+            when (kind) {
+                DataKind.BIG -> Text(value, color = c.text, fontWeight = FontWeight.ExtraBold, fontSize = 28.sp)
+                DataKind.NORMAL -> Text(value, color = c.text, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
+                DataKind.SMALL_MONO -> Text(
+                    value,
+                    color = c.textMute,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 14.sp,
+                    fontFamily = PlexMono,
+                )
+            }
         }
     }
 }
