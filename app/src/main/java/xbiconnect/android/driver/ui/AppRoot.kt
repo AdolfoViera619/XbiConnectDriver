@@ -21,11 +21,14 @@ import androidx.compose.ui.res.stringResource
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import xbiconnect.android.driver.R
+import xbiconnect.android.driver.data.DriverConfig
 import xbiconnect.android.driver.data.DriverPreferences
 import xbiconnect.android.driver.data.LocalDriverPreferences
 import xbiconnect.android.driver.data.PairedVehicle
 import xbiconnect.android.driver.data.Resource
+import xbiconnect.android.driver.data.ServerMode
 import xbiconnect.android.driver.data.network.ApiClient
+import xbiconnect.android.driver.data.repository.ChatwootRepository
 import xbiconnect.android.driver.data.repository.DriversRepository
 import xbiconnect.android.driver.data.repository.VehiclePairingRepository
 import xbiconnect.android.driver.data.state.DriverState
@@ -220,6 +223,8 @@ private fun AppShell(
     driverState: DriverState,
     onUnlink: () -> Unit,
 ) {
+    val prefs = LocalDriverPreferences.current
+    val serverMode by prefs.serverMode.collectAsState(initial = ServerMode.PROD)
     val items = listOf(
         RailItem(Section.HOME, DriverIconName.HOME, stringResource(R.string.nav_trip)),
         RailItem(Section.ANNOUNCEMENTS, DriverIconName.BELL, stringResource(R.string.nav_announcements), badge = 1),
@@ -245,15 +250,44 @@ private fun AppShell(
                     driverState = driverState,
                 )
                 Section.ANNOUNCEMENTS -> ScreenAnnouncements()
-                Section.CHAT -> ScreenChat(
-                    onBack = { onSection(Section.HOME) },
-                    team = false,
-                )
+                Section.CHAT -> {
+                    val chatwootRepo = rememberChatwootRepository(serverMode, paired)
+                    ScreenChat(
+                        onBack = { onSection(Section.HOME) },
+                        repo = chatwootRepo,
+                        sourceId = paired?.vin,
+                        contactName = paired?.label?.let { "Truck $it" } ?: paired?.vin,
+                        contactAttributes = paired?.let { buildContactAttributes(it) },
+                    )
+                }
                 Section.TEAM -> ScreenTeam()
                 Section.SETTINGS -> ScreenSettings(onUnlink = onUnlink)
             }
         }
     }
+}
+
+@Composable
+private fun rememberChatwootRepository(
+    serverMode: ServerMode,
+    paired: PairedVehicle?,
+): ChatwootRepository? {
+    val baseUrl = DriverConfig.resolveInstanceUrl(serverMode, paired)
+    val inboxIdentifier = DriverConfig.resolveInboxIdentifier(serverMode, paired) ?: return null
+    return remember(baseUrl, inboxIdentifier) {
+        ChatwootRepository(
+            api = ApiClient.instanceApi(baseUrl),
+            inboxIdentifier = inboxIdentifier,
+        )
+    }
+}
+
+private fun buildContactAttributes(p: PairedVehicle): Map<String, Any?> = buildMap {
+    put("vin", p.vin)
+    p.label?.let { put("unit_number", it) }
+    p.make?.let { put("make", it) }
+    p.model?.let { put("model", it) }
+    p.year?.let { put("year", it) }
 }
 
 private fun resolvePairingResult(
@@ -292,4 +326,5 @@ private val INITIAL_VEHICLE: PairedVehicle? = PairedVehicle(
     vin = "__INITIAL__", vehicleId = null, label = null, make = null, model = null,
     year = null, driveLine = null, engine = null, customerId = null, customerName = null,
     customerLogoUrl = null, instanceUrl = null, apiToken = null, database = null,
+    inboxIdentifier = null,
 )

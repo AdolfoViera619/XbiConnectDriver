@@ -38,10 +38,15 @@ data class MessagesResponse(
     @SerializedName("payload") val payload: List<MessageDto>,
 )
 
-/** Body for `POST /api/v1/accounts/{id}/conversations/{cid}/messages`. */
+/**
+ * Body for the public Channel::Api send-message endpoint
+ * (`POST /public/api/v1/inboxes/{identifier}/contacts/{source_id}/conversations/{id}/messages`).
+ *
+ * The public endpoint auto-sets `message_type` to incoming and ignores
+ * `private`, so the body is just the content plus an optional client-side
+ * echo id to deduplicate when the message comes back via WebSocket.
+ */
 data class SendMessageRequest(
     @SerializedName("content") val content: String,
-    @SerializedName("message_type") val messageType: Int = MessageType.OUTGOING.value,
-    @SerializedName("private") val private: Boolean = false,
     @SerializedName("echo_id") val echoId: String? = null,
 )

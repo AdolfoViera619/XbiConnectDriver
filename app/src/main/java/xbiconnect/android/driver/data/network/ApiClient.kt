@@ -5,70 +5,88 @@ import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import xbiconnect.android.driver.BuildConfig
+import xbiconnect.android.driver.data.DriverConfig
 import java.util.concurrent.TimeUnit
 
 /**
- * Builds Retrofit clients. There are two distinct base URLs in this product:
+ * Builds Retrofit clients for the Driver app.
  *
- * 1. The **main** XBI API (`api-xbi-main.xbiplus.com`) — endpoints that operate
- *    across all customer instances: VIN pairing, HOS proxy, etc. This client
- *    is a singleton.
+ * Two distinct surfaces:
  *
- * 2. The **instance** URL returned by `validate-vin` — different for each
- *    customer. After pairing, all customer-scoped traffic (messages,
- *    conversations, campaigns) flows through that URL with the
- *    `customer.api_token` for auth. Build one on demand via
- *    [forInstance] and cache it as long as the URL doesn't change.
+ * 1. **Gateway** ([XbiMainApi]): hosts the cross-instance XBI endpoints
+ *    (`validate-vin`, `drivers-by-vin`). Base URL is fixed to
+ *    [DriverConfig.GATEWAY_BASE_URL]. No local docker version exists — the
+ *    gateway is production-only. Singleton.
+ *
+ * 2. **Chatwoot instance** ([XbiInstanceApi]): the customer's Chatwoot
+ *    workspace, where conversations live. Base URL changes with
+ *    [xbiconnect.android.driver.data.ServerMode] (LOCAL → docker; PROD →
+ *    instance URL from the paired vehicle). Public Channel::Api endpoints
+ *    don't require auth — only the inbox identifier in the URL.
+ *
+ * The instance client is rebuilt when the base URL changes (rare:
+ * pair / unpair / mode toggle). Callers ask for it via [instanceApi].
  */
 object ApiClient {
 
-    private const val MAIN_BASE_URL = "https://api-xbi-main.xbiplus.com/"
+    private val sharedLogging by lazy {
+        HttpLoggingInterceptor().apply {
+            level = if (BuildConfig.DEBUG) {
+                HttpLoggingInterceptor.Level.BODY
+            } else {
+                HttpLoggingInterceptor.Level.NONE
+            }
+        }
+    }
 
-    private val sharedOkHttp: OkHttpClient by lazy { buildOkHttp(authToken = null) }
+    private val gatewayOkHttp: OkHttpClient by lazy {
+        OkHttpClient.Builder()
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(20, TimeUnit.SECONDS)
+            .writeTimeout(20, TimeUnit.SECONDS)
+            .addInterceptor(sharedLogging)
+            .build()
+    }
 
     val mainApi: XbiMainApi by lazy {
         Retrofit.Builder()
-            .baseUrl(MAIN_BASE_URL)
-            .client(sharedOkHttp)
+            .baseUrl(DriverConfig.GATEWAY_BASE_URL)
+            .client(gatewayOkHttp)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
             .create(XbiMainApi::class.java)
     }
 
-    /**
-     * Returns an [XbiInstanceApi] bound to the given customer instance URL.
-     * Caller is responsible for caching this — typically you'd hold it as long
-     * as the paired instance doesn't change.
-     */
-    fun forInstance(baseUrl: String, authToken: String?): XbiInstanceApi {
-        val normalized = baseUrl.trimEnd('/') + "/"
-        return Retrofit.Builder()
-            .baseUrl(normalized)
-            .client(buildOkHttp(authToken))
-            .addConverterFactory(GsonConverterFactory.create())
-            .build()
-            .create(XbiInstanceApi::class.java)
-    }
+    @Volatile private var cachedInstanceUrl: String? = null
+    @Volatile private var cachedInstanceApi: XbiInstanceApi? = null
 
-    private fun buildOkHttp(authToken: String?): OkHttpClient =
-        OkHttpClient.Builder()
+    /**
+     * Returns an [XbiInstanceApi] bound to [baseUrl]. The Retrofit instance
+     * is cached and reused while the URL is the same; rebuilt automatically
+     * when the user toggles server mode or re-pairs.
+     */
+    @Synchronized
+    fun instanceApi(baseUrl: String): XbiInstanceApi {
+        val normalized = if (baseUrl.endsWith("/")) baseUrl else "$baseUrl/"
+        cachedInstanceApi?.takeIf { cachedInstanceUrl == normalized }?.let { return it }
+
+        val okHttp = OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(20, TimeUnit.SECONDS)
             .writeTimeout(20, TimeUnit.SECONDS)
-            .apply {
-                if (BuildConfig.DEBUG) {
-                    addInterceptor(HttpLoggingInterceptor().apply {
-                        level = HttpLoggingInterceptor.Level.BODY
-                    })
-                }
-                if (!authToken.isNullOrBlank()) {
-                    addInterceptor { chain ->
-                        val req = chain.request().newBuilder()
-                            .header("Authorization", "Bearer $authToken")
-                            .build()
-                        chain.proceed(req)
-                    }
-                }
-            }
+            .addInterceptor(sharedLogging)
             .build()
+
+        val api = Retrofit.Builder()
+            .baseUrl(normalized)
+            .client(okHttp)
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+            .create(XbiInstanceApi::class.java)
+
+        cachedInstanceUrl = normalized
+        cachedInstanceApi = api
+        return api
+    }
 }
+

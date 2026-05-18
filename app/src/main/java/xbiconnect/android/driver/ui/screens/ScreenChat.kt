@@ -16,17 +16,21 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshots.SnapshotStateList
-import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -35,97 +39,158 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.UUID
+import kotlinx.coroutines.launch
 import xbiconnect.android.driver.R
+import xbiconnect.android.driver.data.Resource
+import xbiconnect.android.driver.data.api.dto.MessageDto
+import xbiconnect.android.driver.data.api.dto.MessageType
+import xbiconnect.android.driver.data.repository.ChatwootRepository
+import xbiconnect.android.driver.data.state.ChatState
 import xbiconnect.android.driver.ui.components.DriverIcon
 import xbiconnect.android.driver.ui.components.DriverIconName
 import xbiconnect.android.driver.ui.theme.LocalAppColors
 
-private data class ChatMsg(
-    val id: Long,
-    val fromMe: Boolean,
-    val who: String,
-    val text: String,
-    val time: String,
-)
-
+/**
+ * @param repo  ChatwootRepository bound to the right Chatwoot instance + inbox.
+ *              Null when the app is not paired or no inbox identifier is
+ *              available (e.g. PROD with a gateway that doesn't return it yet);
+ *              in that case the screen shows a clear empty state.
+ * @param sourceId  Contact source_id — we use the VIN.
+ * @param contactName  Display name for the contact ("Truck 45"). Used when
+ *              the contact has to be created on the fly.
+ */
 @Composable
-fun ScreenChat(onBack: () -> Unit, team: Boolean) {
+fun ScreenChat(
+    onBack: () -> Unit,
+    repo: ChatwootRepository?,
+    sourceId: String?,
+    contactName: String?,
+    contactAttributes: Map<String, Any?>? = null,
+) {
     val c = LocalAppColors.current
+    val scope = rememberCoroutineScope()
+    var state by remember(repo, sourceId) { mutableStateOf<ChatState>(ChatState.Idle) }
     var input by rememberSaveable { mutableStateOf("") }
     var showVoice by remember { mutableStateOf(false) }
-    val msgDispatch = stringResource(R.string.msg_dispatch_neal)
-    val msgTeam = stringResource(R.string.msg_team_response)
 
-    val messages = remember(team) {
-        val initial = mutableListOf(
-            ChatMsg(1, false, "Dispatch (Neal)", msgDispatch, "3:10 PM"),
-        )
-        if (team) initial.add(ChatMsg(2, true, "Roberto Luna (co-driver)", msgTeam, "3:12 PM"))
-        initial.toMutableStateList()
+    LaunchedEffect(repo, sourceId) {
+        if (repo == null || sourceId.isNullOrBlank()) {
+            state = ChatState.Error("Chat no disponible — la tableta no está enlazada.")
+            return@LaunchedEffect
+        }
+        state = ChatState.Loading
+        val contact = when (val r = repo.findOrCreateContact(sourceId, contactName, contactAttributes)) {
+            is Resource.Success -> r.data
+            is Resource.Error -> { state = ChatState.Error(r.message); return@LaunchedEffect }
+            else -> return@LaunchedEffect
+        }
+        val convo = when (val r = repo.loadOrStartConversation(sourceId)) {
+            is Resource.Success -> r.data
+            is Resource.Error -> { state = ChatState.Error(r.message); return@LaunchedEffect }
+            else -> return@LaunchedEffect
+        }
+        val messages = when (val r = repo.listMessages(sourceId, convo.id)) {
+            is Resource.Success -> r.data
+            is Resource.Error -> { state = ChatState.Error(r.message); return@LaunchedEffect }
+            else -> return@LaunchedEffect
+        }
+        state = ChatState.Ready(contact, convo, messages.sortedBy { it.createdAt })
     }
 
     Column(Modifier.fillMaxSize()) {
-        ChatHeader(onBack = onBack, team = team)
-        LazyColumn(
-            Modifier
-                .fillMaxWidth()
-                .weight(1f)
-                .background(c.surfaceSoft)
-                .padding(horizontal = 20.dp, vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            item {
-                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    Box(
-                        Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(c.line)
-                            .padding(horizontal = 10.dp, vertical = 3.dp),
-                    ) {
-                        Text(stringResource(R.string.chat_today), color = c.textFaint, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
-                    }
-                }
-            }
-            items(messages.size) { idx ->
-                val m = messages[idx]
-                MessageBubble(m)
+        ChatHeader(onBack = onBack)
+        when (val s = state) {
+            ChatState.Idle, ChatState.Loading -> LoadingPanel()
+            is ChatState.Error -> ErrorPanel(s.message)
+            is ChatState.Ready -> {
+                MessagesList(
+                    messages = s.messages,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .background(c.surfaceSoft),
+                )
+                Composer(
+                    input = input,
+                    onInput = { input = it },
+                    sending = s.sending,
+                    onSend = {
+                        val text = input.trim()
+                        if (text.isBlank() || repo == null || sourceId == null) return@Composer
+                        input = ""
+                        val echoId = UUID.randomUUID().toString()
+                        val optimistic = optimisticMessage(text, s.conversation.id, echoId)
+                        state = s.copy(messages = s.messages + optimistic, sending = true)
+                        scope.launch {
+                            val current = state as? ChatState.Ready ?: return@launch
+                            when (val r = repo.sendMessage(sourceId, s.conversation.id, text, echoId)) {
+                                is Resource.Success -> {
+                                    state = current.copy(
+                                        messages = current.messages.map { m ->
+                                            if (m.echoId == echoId) r.data else m
+                                        },
+                                        sending = false,
+                                    )
+                                }
+                                is Resource.Error -> {
+                                    state = current.copy(sending = false)
+                                    // Optimistic message stays so user sees what failed.
+                                }
+                                else -> {}
+                            }
+                        }
+                    },
+                    onMic = { showVoice = true },
+                )
             }
         }
-        Composer(
-            input = input,
-            onInput = { input = it },
-            onSend = {
-                if (input.isNotBlank()) {
-                    val author = if (team) "Roberto Luna (co-driver)" else "Carlos Méndez (driver)"
-                    messages.add(ChatMsg(System.currentTimeMillis(), true, author, input, "ahora"))
-                    input = ""
-                }
-            },
-            onQuickSend = { txt ->
-                val author = if (team) "Roberto Luna (co-driver)" else "Carlos Méndez (driver)"
-                messages.add(ChatMsg(System.currentTimeMillis(), true, author, txt, "ahora"))
-            },
-            onMic = { showVoice = true },
-            team = team,
-        )
     }
 
     if (showVoice) {
         VoiceModal(
             onDismiss = { showVoice = false },
-            onSend = { txt ->
-                val author = if (team) "Roberto Luna (co-driver)" else "Carlos Méndez (driver)"
-                messages.add(ChatMsg(System.currentTimeMillis(), true, author, txt, "ahora"))
+            onSend = { dictated ->
+                if (state is ChatState.Ready && repo != null && sourceId != null) {
+                    val ready = state as ChatState.Ready
+                    val echoId = UUID.randomUUID().toString()
+                    val optimistic = optimisticMessage(dictated, ready.conversation.id, echoId)
+                    state = ready.copy(messages = ready.messages + optimistic, sending = true)
+                    scope.launch {
+                        val current = state as? ChatState.Ready ?: return@launch
+                        when (val r = repo.sendMessage(sourceId, ready.conversation.id, dictated, echoId)) {
+                            is Resource.Success -> state = current.copy(
+                                messages = current.messages.map { if (it.echoId == echoId) r.data else it },
+                                sending = false,
+                            )
+                            is Resource.Error -> state = current.copy(sending = false)
+                            else -> {}
+                        }
+                    }
+                }
                 showVoice = false
             },
         )
     }
 }
 
+private fun optimisticMessage(content: String, conversationId: Int, echoId: String) = MessageDto(
+    id = 0,
+    content = content,
+    messageType = MessageType.INCOMING,
+    createdAt = System.currentTimeMillis() / 1000,
+    conversationId = conversationId,
+    echoId = echoId,
+)
+
 @Composable
-private fun ChatHeader(onBack: () -> Unit, team: Boolean) {
+private fun ChatHeader(onBack: () -> Unit) {
     val c = LocalAppColors.current
     Row(
         Modifier
@@ -144,35 +209,76 @@ private fun ChatHeader(onBack: () -> Unit, team: Boolean) {
             Text(stringResource(R.string.chat_back), color = c.text, fontWeight = FontWeight.Bold, fontSize = 12.sp)
         }
         Text(stringResource(R.string.chat_header), color = c.text, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-        if (team) {
-            Box(
-                Modifier
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(c.warnBg)
-                    .border(1.dp, c.warnBorder, RoundedCornerShape(6.dp))
-                    .padding(horizontal = 8.dp, vertical = 2.dp),
-            ) {
-                Text(stringResource(R.string.answering_as), color = c.warnText, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-            }
-        } else {
-            Text(stringResource(R.string.chat_online), color = c.textMute, fontSize = 11.sp)
-        }
+        Text(stringResource(R.string.chat_online), color = c.textMute, fontSize = 11.sp)
     }
     Box(Modifier.fillMaxWidth().height(1.dp).background(c.line))
 }
 
 @Composable
-private fun MessageBubble(m: ChatMsg) {
+private fun LoadingPanel() {
     val c = LocalAppColors.current
+    Box(
+        Modifier.fillMaxSize().background(c.surfaceSoft),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            CircularProgressIndicator(color = c.brand, strokeWidth = 2.5.dp)
+            Spacer(Modifier.height(12.dp))
+            Text("Cargando mensajes…", color = c.textMute, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+        }
+    }
+}
+
+@Composable
+private fun ErrorPanel(message: String) {
+    val c = LocalAppColors.current
+    Box(
+        Modifier.fillMaxSize().background(c.surfaceSoft).padding(24.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            DriverIcon(DriverIconName.ALERT, size = 32.dp, color = c.warn, strokeWidth = 2.dp)
+            Spacer(Modifier.height(12.dp))
+            Text(
+                message,
+                color = c.text,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+    }
+}
+
+@Composable
+private fun MessagesList(messages: List<MessageDto>, modifier: Modifier = Modifier) {
+    val listState = rememberLazyListState()
+    LaunchedEffect(messages.size) {
+        if (messages.isNotEmpty()) listState.animateScrollToItem(messages.lastIndex)
+    }
+    LazyColumn(
+        modifier = modifier.padding(horizontal = 20.dp, vertical = 16.dp),
+        state = listState,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        items(messages.size) { idx ->
+            MessageBubble(messages[idx])
+        }
+    }
+}
+
+@Composable
+private fun MessageBubble(m: MessageDto) {
+    val c = LocalAppColors.current
+    val fromTruck = m.messageType == MessageType.INCOMING  // public API: incoming = from contact = from truck
     Row(
         Modifier.fillMaxWidth(),
-        horizontalArrangement = if (m.fromMe) Arrangement.End else Arrangement.Start,
+        horizontalArrangement = if (fromTruck) Arrangement.End else Arrangement.Start,
     ) {
-        val bg = if (m.fromMe) c.brand else c.surface
-        val fg = if (m.fromMe) c.brandOn else c.text
-        val whoFg = if (m.fromMe) c.warnDot else c.info
-        val timeFg = if (m.fromMe) c.brandOn.copy(alpha = 0.55f) else c.textFaint
-        val shape = if (m.fromMe)
+        val bg = if (fromTruck) c.brand else c.surface
+        val fg = if (fromTruck) c.brandOn else c.text
+        val timeFg = if (fromTruck) c.brandOn.copy(alpha = 0.55f) else c.textFaint
+        val whoFg = if (fromTruck) c.warnDot else c.info
+        val shape = if (fromTruck)
             RoundedCornerShape(16.dp, 4.dp, 16.dp, 16.dp)
         else
             RoundedCornerShape(4.dp, 16.dp, 16.dp, 16.dp)
@@ -181,20 +287,21 @@ private fun MessageBubble(m: ChatMsg) {
                 .widthIn(max = 420.dp)
                 .clip(shape)
                 .background(bg)
-                .let { if (!m.fromMe) it.border(1.dp, c.line, shape) else it }
+                .let { if (!fromTruck) it.border(1.dp, c.line, shape) else it }
                 .padding(horizontal = 14.dp, vertical = 10.dp),
         ) {
-            Text(m.who, color = whoFg, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+            val who = m.sender?.name ?: if (fromTruck) "Tú" else "Despacho"
+            Text(who, color = whoFg, fontSize = 10.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(3.dp))
-            Text(m.text, color = fg, fontSize = 14.sp, lineHeight = 20.sp)
+            Text(m.content.orEmpty(), color = fg, fontSize = 14.sp, lineHeight = 20.sp)
             Spacer(Modifier.height(4.dp))
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(m.time, color = timeFg, fontSize = 10.sp)
-                if (m.fromMe) {
+                Text(formatTime(m.createdAt), color = timeFg, fontSize = 10.sp)
+                if (fromTruck) {
                     Spacer(Modifier.width(4.dp))
                     DriverIcon(DriverIconName.CHECK_ALL, size = 12.dp, color = Color(0xFF53BDEB), strokeWidth = 2.dp)
                 }
@@ -203,14 +310,18 @@ private fun MessageBubble(m: ChatMsg) {
     }
 }
 
+private val timeFmt = SimpleDateFormat("HH:mm", Locale.getDefault())
+
+private fun formatTime(unixSeconds: Long): String =
+    if (unixSeconds <= 0) "ahora" else timeFmt.format(Date(unixSeconds * 1000))
+
 @Composable
 private fun Composer(
     input: String,
     onInput: (String) -> Unit,
+    sending: Boolean,
     onSend: () -> Unit,
-    onQuickSend: (String) -> Unit,
     onMic: () -> Unit,
-    team: Boolean,
 ) {
     val c = LocalAppColors.current
     Column(
@@ -219,12 +330,6 @@ private fun Composer(
             .background(c.surface)
             .padding(horizontal = 16.dp, vertical = 10.dp),
     ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            QuickChip(stringResource(R.string.chat_quick_got_it), c.goBg, c.goBorder, c.goText) { onQuickSend(it) }
-            QuickChip(stringResource(R.string.chat_quick_arrived), c.goBg, c.goBorder, c.goText) { onQuickSend(it) }
-            QuickChip(stringResource(R.string.chat_quick_delayed), c.warnBg, c.warnBorder, c.warnText) { onQuickSend(it) }
-        }
-        Spacer(Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
                 Modifier
@@ -250,7 +355,7 @@ private fun Composer(
             ) {
                 if (input.isEmpty()) {
                     Text(
-                        if (team) stringResource(R.string.chat_input_team) else stringResource(R.string.chat_input_placeholder),
+                        stringResource(R.string.chat_input_placeholder),
                         color = c.textFaint,
                         fontSize = 14.sp,
                     )
@@ -261,6 +366,8 @@ private fun Composer(
                     textStyle = TextStyle(color = c.text, fontSize = 14.sp),
                     cursorBrush = SolidColor(c.brand),
                     singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                    keyboardActions = KeyboardActions(onSend = { onSend() }),
                 )
             }
             Spacer(Modifier.width(8.dp))
@@ -268,26 +375,20 @@ private fun Composer(
                 Modifier
                     .size(44.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(c.brand)
-                    .clickable(onClick = onSend),
+                    .background(if (sending) c.brand.copy(alpha = 0.4f) else c.brand)
+                    .clickable(enabled = !sending, onClick = onSend),
                 contentAlignment = Alignment.Center,
             ) {
-                DriverIcon(DriverIconName.SEND, size = 18.dp, color = c.brandOn)
+                if (sending) {
+                    CircularProgressIndicator(
+                        color = c.brandOn,
+                        strokeWidth = 2.dp,
+                        modifier = Modifier.size(18.dp),
+                    )
+                } else {
+                    DriverIcon(DriverIconName.SEND, size = 18.dp, color = c.brandOn)
+                }
             }
         }
-    }
-}
-
-@Composable
-private fun QuickChip(text: String, bg: Color, border: Color, fg: Color, onClick: (String) -> Unit) {
-    Box(
-        Modifier
-            .clip(RoundedCornerShape(10.dp))
-            .background(bg)
-            .border(1.5.dp, border, RoundedCornerShape(10.dp))
-            .clickable { onClick(text) }
-            .padding(horizontal = 14.dp, vertical = 8.dp),
-    ) {
-        Text(text, color = fg, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
     }
 }

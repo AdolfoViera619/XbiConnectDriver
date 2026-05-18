@@ -32,6 +32,14 @@ data class PairedVehicle(
     val instanceUrl: String?,
     val apiToken: String?,
     val database: String?,
+    /**
+     * Chatwoot Channel::Api `identifier` token for the driver inbox of this
+     * customer. Today the gateway's `validate-vin` does not include this in
+     * its response — when in [ServerMode.LOCAL] development the app falls
+     * back to a hardcoded dev identifier (see [DriverConfig]). When the
+     * gateway is extended to return it, persistence handles it here.
+     */
+    val inboxIdentifier: String?,
 )
 
 /**
@@ -60,6 +68,7 @@ class DriverPreferences(private val context: Context) {
     private val instanceUrlKey = stringPreferencesKey("instance_url")
     private val apiTokenKey = stringPreferencesKey("api_token")
     private val databaseKey = stringPreferencesKey("database")
+    private val inboxIdentifierKey = stringPreferencesKey("inbox_identifier")
 
     val vin: Flow<String?> = context.dataStore.data.map { it[vinKey] }
 
@@ -89,6 +98,7 @@ class DriverPreferences(private val context: Context) {
             instanceUrl = prefs[instanceUrlKey],
             apiToken = prefs[apiTokenKey],
             database = prefs[databaseKey],
+            inboxIdentifier = prefs[inboxIdentifierKey],
         )
     }
 
@@ -102,6 +112,7 @@ class DriverPreferences(private val context: Context) {
         customer: xbiconnect.android.driver.data.api.dto.CustomerDto?,
         instanceUrl: String?,
         database: String?,
+        inboxIdentifier: String? = null,
     ) {
         context.dataStore.edit { prefs ->
             prefs[vinKey] = vin
@@ -118,6 +129,7 @@ class DriverPreferences(private val context: Context) {
             instanceUrl?.let { prefs[instanceUrlKey] = it }
             customer?.apiToken?.let { prefs[apiTokenKey] = it }
             database?.let { prefs[databaseKey] = it }
+            inboxIdentifier?.let { prefs[inboxIdentifierKey] = it }
         }
     }
 
@@ -137,6 +149,7 @@ class DriverPreferences(private val context: Context) {
             prefs.remove(instanceUrlKey)
             prefs.remove(apiTokenKey)
             prefs.remove(databaseKey)
+            prefs.remove(inboxIdentifierKey)
         }
     }
 
