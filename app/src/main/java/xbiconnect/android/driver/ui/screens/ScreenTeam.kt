@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -29,12 +28,6 @@ import xbiconnect.android.driver.R
 import xbiconnect.android.driver.data.api.dto.HosDriverDto
 import xbiconnect.android.driver.data.state.DriverState
 import xbiconnect.android.driver.ui.components.DriverCard
-import xbiconnect.android.driver.ui.components.DriverMetric
-import xbiconnect.android.driver.ui.components.DriverStatus
-import xbiconnect.android.driver.ui.components.HOSKind
-import xbiconnect.android.driver.ui.components.HOSLegend
-import xbiconnect.android.driver.ui.components.HOSSegment
-import xbiconnect.android.driver.ui.components.HOSTimeline
 import xbiconnect.android.driver.ui.components.InfoCallout
 import xbiconnect.android.driver.ui.components.SystemBar
 import xbiconnect.android.driver.ui.components.driverStatusFromCode
@@ -66,8 +59,6 @@ fun ScreenTeam(driverState: DriverState) {
                 is DriverState.Error -> EmptyBlock(driverState.message)
                 is DriverState.Active -> ActiveTeamBlock(driverState.main, driverState.coDriver)
             }
-
-            HosTimelineBlock(driverState as? DriverState.Active)
         }
         InfoCallout(stringResource(R.string.team_callout))
     }
@@ -113,15 +104,15 @@ private fun ActiveTeamBlock(main: HosDriverDto, coDriver: HosDriverDto?) {
 @Composable
 private fun DriverCardFromHos(driver: HosDriverDto, modifier: Modifier) {
     val name = driver.name?.takeIf { it.isNotBlank() } ?: "—"
+    // Metrics intentionally omitted for now (HOS + Km dropped per product
+    // decision 2026-05-18). Bring back when the team aligns on which numbers
+    // belong on this card and which endpoints feed them.
     DriverCard(
         initials = initialsFromName(name),
         name = name,
         status = driverStatusFromCode(driver.statusCode),
         statusLabel = driver.statusLabel,
-        metrics = listOfNotNull(
-            driver.drivingTime?.takeIf { it.isNotBlank() }?.let { DriverMetric("HOS", it) },
-            driver.onDutyTime?.takeIf { it.isNotBlank() }?.let { DriverMetric("Turno", it) },
-        ),
+        metrics = emptyList(),
         modifier = modifier,
     )
 }
@@ -135,64 +126,3 @@ private fun initialsFromName(name: String): String {
     }
     return parts.joinToString("").uppercase()
 }
-
-@Composable
-private fun HosTimelineBlock(active: DriverState.Active?) {
-    val c = xbiconnect.android.driver.ui.theme.LocalAppColors.current
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(c.surface)
-            .border(1.dp, c.line, RoundedCornerShape(12.dp))
-            .padding(16.dp),
-    ) {
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text(
-                stringResource(R.string.hos_24h),
-                color = c.textMute,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 1.sp,
-            )
-            // TODO: real 24h HOS log endpoint pending from backend. Until then
-            // we keep the demo segments so the UI doesn't go blank — the
-            // labels make the names match the actual drivers when available.
-            Text("Datos de ejemplo · pendiente del server", color = c.textFaint, fontSize = 10.sp)
-        }
-        Spacer(Modifier.height(10.dp))
-        HOSTimeline(
-            active?.main?.name ?: "Chofer principal",
-            DEMO_TIMELINE_PRIMARY,
-        )
-        Spacer(Modifier.height(10.dp))
-        HOSTimeline(
-            active?.coDriver?.name ?: "Co-chofer",
-            DEMO_TIMELINE_SECONDARY,
-        )
-        Spacer(Modifier.height(12.dp))
-        HOSLegend()
-    }
-}
-
-// Demo segments kept verbatim from the original UI design. Will be replaced
-// once the server exposes a per-driver HOS history endpoint.
-private val DEMO_TIMELINE_PRIMARY = listOf(
-    HOSSegment(HOSKind.REST, 22f),
-    HOSSegment(HOSKind.ON_DUTY, 8f),
-    HOSSegment(HOSKind.DRIVE, 28f),
-    HOSSegment(HOSKind.ON_DUTY, 4f),
-    HOSSegment(HOSKind.REST, 12f),
-    HOSSegment(HOSKind.DRIVE, 22f),
-    HOSSegment(HOSKind.ON_DUTY, 4f),
-)
-private val DEMO_TIMELINE_SECONDARY = listOf(
-    HOSSegment(HOSKind.DRIVE, 24f),
-    HOSSegment(HOSKind.REST, 36f),
-    HOSSegment(HOSKind.ON_DUTY, 6f),
-    HOSSegment(HOSKind.DRIVE, 18f),
-    HOSSegment(HOSKind.REST, 16f),
-)

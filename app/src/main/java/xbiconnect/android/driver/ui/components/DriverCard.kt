@@ -87,29 +87,31 @@ fun DriverCard(
                 }
             }
         }
-        Spacer(Modifier.height(10.dp))
-        Row {
-            metrics.forEachIndexed { idx, m ->
-                if (idx > 0) Box(Modifier.width(1.dp).height(36.dp).background(border))
-                Column(
-                    Modifier.weight(1f),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Text(
-                        m.label.uppercase(),
-                        color = c.textMute,
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        letterSpacing = 0.4.sp,
-                    )
-                    Spacer(Modifier.height(2.dp))
-                    Text(
-                        m.value,
-                        color = m.color ?: c.text,
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        fontFamily = PlexMono,
-                    )
+        if (metrics.isNotEmpty()) {
+            Spacer(Modifier.height(10.dp))
+            Row {
+                metrics.forEachIndexed { idx, m ->
+                    if (idx > 0) Box(Modifier.width(1.dp).height(36.dp).background(border))
+                    Column(
+                        Modifier.weight(1f),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Text(
+                            m.label.uppercase(),
+                            color = c.textMute,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            letterSpacing = 0.4.sp,
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            m.value,
+                            color = m.color ?: c.text,
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontFamily = PlexMono,
+                        )
+                    }
                 }
             }
         }
