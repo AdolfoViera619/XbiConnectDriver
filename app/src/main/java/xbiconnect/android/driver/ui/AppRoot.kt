@@ -280,7 +280,7 @@ private fun AppShell(
                     state = chatSession?.state ?: ChatState.Error("Chat no disponible — la tableta no está enlazada o el servidor no devolvió inbox."),
                     onSend = { text -> chatSession?.send(text) },
                 )
-                Section.TEAM -> ScreenTeam()
+                Section.TEAM -> ScreenTeam(driverState = driverState)
                 Section.SETTINGS -> ScreenSettings(onUnlink = onUnlink)
             }
         }

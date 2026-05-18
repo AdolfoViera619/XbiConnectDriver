@@ -35,16 +35,28 @@ fun DriverCard(
     status: DriverStatus,
     metrics: List<DriverMetric>,
     modifier: Modifier = Modifier,
+    statusLabel: String? = null,
 ) {
     val c = LocalAppColors.current
-    val isActive = status == DriverStatus.DRIVING
-    val bg = if (isActive) c.goBgSoft else c.warnBgSoft
-    val border = if (isActive) c.goBorder else c.warnBorder
-    val avatarBg = if (isActive) c.goBg else c.warnBg
-    val avatarFg = if (isActive) c.goText else c.warnText
-    val dot = if (isActive) c.goDot else c.warnDot
-    val labelText = if (isActive) "DRIVING" else "SLEEPER"
-    val labelFg = if (isActive) c.goText else c.warnText
+    val palette = when (status) {
+        DriverStatus.DRIVING -> Triple(c.goBgSoft, c.goBorder, Triple(c.goBg, c.goText, c.goDot))
+        DriverStatus.SLEEPER -> Triple(c.warnBgSoft, c.warnBorder, Triple(c.warnBg, c.warnText, c.warnDot))
+        DriverStatus.AVAILABLE -> Triple(c.surfaceSoft, c.infoBorder, Triple(c.infoBg, c.infoText, c.info))
+        DriverStatus.OFF -> Triple(c.canvas, c.line, Triple(c.canvas, c.textMute, c.textFaint))
+    }
+    val bg = palette.first
+    val border = palette.second
+    val avatarBg = palette.third.first
+    val avatarFg = palette.third.second
+    val dot = palette.third.third
+    val labelFallback = when (status) {
+        DriverStatus.DRIVING -> "DRIVING"
+        DriverStatus.SLEEPER -> "SLEEPER"
+        DriverStatus.AVAILABLE -> "ON DUTY"
+        DriverStatus.OFF -> "OFF DUTY"
+    }
+    val labelText = statusLabel?.takeIf { it.isNotBlank() }?.uppercase() ?: labelFallback
+    val labelFg = avatarFg
 
     Column(
         modifier
