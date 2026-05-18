@@ -24,12 +24,22 @@ data class PublicContactDto(
 )
 
 /**
- * Body for `POST /public/api/v1/inboxes/{identifier}/contacts`. Chatwoot's
- * public-API contracts use snake_case. `identifier` here is the contact's
- * `source_id` — for the Driver app we send the VIN.
+ * Body for `POST /public/api/v1/inboxes/{identifier}/contacts`.
+ *
+ * Chatwoot's public contacts controller reads two distinct fields:
+ *  - `source_id` (top-level param) → goes into `ContactInbox.source_id`,
+ *    which is what the URL paths look up. **If omitted, the server falls
+ *    back to a random UUID** and the contact_inbox ends up with a source_id
+ *    different from what we sent — subsequent calls keyed by VIN return 404.
+ *  - `identifier` → goes into `Contact.identifier` at the account level
+ *    (used for cross-inbox dedup by external id).
+ *
+ * For the Driver app the truck is uniquely identified by its VIN, so both
+ * fields receive the same value.
  */
 data class CreateContactRequest(
-    @SerializedName("identifier") val sourceId: String,
+    @SerializedName("source_id") val sourceId: String,
+    @SerializedName("identifier") val identifier: String,
     @SerializedName("name") val name: String? = null,
     @SerializedName("email") val email: String? = null,
     @SerializedName("phone_number") val phoneNumber: String? = null,

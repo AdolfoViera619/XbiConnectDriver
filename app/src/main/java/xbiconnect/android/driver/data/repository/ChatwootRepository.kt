@@ -1,6 +1,5 @@
 package xbiconnect.android.driver.data.repository
 
-import retrofit2.HttpException
 import xbiconnect.android.driver.data.Resource
 import xbiconnect.android.driver.data.api.dto.CreateContactRequest
 import xbiconnect.android.driver.data.api.dto.MessageDto
@@ -25,32 +24,26 @@ class ChatwootRepository(
 ) {
 
     /**
-     * Find the contact for [sourceId] (VIN) and create it if it doesn't
-     * exist. Chatwoot's public API doesn't have a native "upsert" — we
-     * GET first and POST on 404.
+     * Get-or-create the contact for [sourceId] (VIN). Chatwoot's
+     * `POST /contacts` is idempotent on `source_id` server-side
+     * (`ContactInboxWithContactBuilder` calls `find_by(source_id:)` first
+     * and returns the existing record if any) — so a single POST handles
+     * both cases without a probe GET that would 404 the first time.
      */
     suspend fun findOrCreateContact(
         sourceId: String,
         displayName: String?,
         customAttributes: Map<String, Any?>? = null,
     ): Resource<PublicContactDto> = try {
-        val existing = runCatching { api.getContact(inboxIdentifier, sourceId) }
-            .getOrElse { error ->
-                if (error is HttpException && error.code() == 404) {
-                    null
-                } else {
-                    throw error
-                }
-            }
-        val contact = existing
-            ?: api.createContact(
-                inboxIdentifier = inboxIdentifier,
-                body = CreateContactRequest(
-                    sourceId = sourceId,
-                    name = displayName,
-                    customAttributes = customAttributes,
-                ),
-            )
+        val contact = api.createContact(
+            inboxIdentifier = inboxIdentifier,
+            body = CreateContactRequest(
+                sourceId = sourceId,
+                identifier = sourceId,
+                name = displayName,
+                customAttributes = customAttributes,
+            ),
+        )
         Resource.Success(contact)
     } catch (e: IOException) {
         Resource.Error("Sin conexión con el servidor de mensajes.", e)
