@@ -245,6 +245,10 @@ private fun AppShell(
     // signal we want to render at that moment.
     val chatBadge = if (section == Section.CHAT) 0 else (chatSession?.unreadCount ?: 0)
 
+    // Latest message (any direction) to surface on the Trip "último mensaje"
+    // preview card. Null while loading / no messages yet.
+    val lastChatMessage = (chatSession?.state as? ChatState.Ready)?.messages?.lastOrNull()
+
     val items = listOf(
         RailItem(Section.HOME, DriverIconName.HOME, stringResource(R.string.nav_trip)),
         RailItem(Section.ANNOUNCEMENTS, DriverIconName.BELL, stringResource(R.string.nav_announcements), badge = 1),
@@ -268,6 +272,7 @@ private fun AppShell(
                     onSimulateDrive = onSimulateDrive,
                     paired = paired,
                     driverState = driverState,
+                    lastMessage = lastChatMessage,
                 )
                 Section.ANNOUNCEMENTS -> ScreenAnnouncements()
                 Section.CHAT -> ScreenChat(

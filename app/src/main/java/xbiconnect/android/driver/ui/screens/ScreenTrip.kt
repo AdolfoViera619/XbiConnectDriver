@@ -28,8 +28,13 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import xbiconnect.android.driver.R
 import xbiconnect.android.driver.data.PairedVehicle
+import xbiconnect.android.driver.data.api.dto.MessageDto
+import xbiconnect.android.driver.data.api.dto.MessageType
 import xbiconnect.android.driver.data.state.DriverState
 import xbiconnect.android.driver.ui.components.DriverBadge
 import xbiconnect.android.driver.ui.components.DriverIcon
@@ -46,6 +51,7 @@ fun ScreenTrip(
     onSimulateDrive: () -> Unit,
     paired: PairedVehicle?,
     driverState: DriverState,
+    lastMessage: MessageDto? = null,
 ) {
     val c = LocalAppColors.current
     val unitLabel = paired?.label?.takeIf { it.isNotBlank() }?.let { "Unidad $it" }
@@ -74,7 +80,7 @@ fun ScreenTrip(
             )
             TripRouteCard()
             AnnouncementPinnedCard(onOpen = onOpenAnnouncement)
-            LastMessageCard(onOpen = onOpenChat)
+            LastMessageCard(message = lastMessage, onOpen = onOpenChat)
         }
     }
 }
@@ -236,7 +242,7 @@ private fun AnnouncementPinnedCard(onOpen: () -> Unit) {
 }
 
 @Composable
-private fun LastMessageCard(onOpen: () -> Unit) {
+private fun LastMessageCard(message: MessageDto?, onOpen: () -> Unit) {
     val c = LocalAppColors.current
     Column(
         Modifier
@@ -248,23 +254,60 @@ private fun LastMessageCard(onOpen: () -> Unit) {
             .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
+        // Public Channel::Api: OUTGOING = from the agent/dispatcher,
+        // INCOMING = from the truck (us).
+        val fromTruck = message?.messageType == MessageType.INCOMING
+        val authorLabel = when {
+            message == null -> "Despacho"
+            fromTruck -> "Tú"
+            else -> message.sender?.name?.takeIf { it.isNotBlank() } ?: "Despacho"
+        }
+        val authorColor = if (fromTruck) c.warn else c.info
+
         Row(verticalAlignment = Alignment.CenterVertically) {
-            DriverIcon(DriverIconName.CHAT, size = 12.dp, color = c.info)
+            DriverIcon(DriverIconName.CHAT, size = 12.dp, color = authorColor)
             Spacer(Modifier.width(6.dp))
             Text(
-                stringResource(R.string.dispatch_label),
-                color = c.info,
+                authorLabel,
+                color = authorColor,
                 fontSize = 10.sp,
                 fontWeight = FontWeight.Bold,
             )
             Spacer(Modifier.weight(1f))
-            Text(stringResource(R.string.dispatch_5min), color = c.textFaint, fontSize = 10.sp)
+            Text(
+                formatRelativeAgo(message?.createdAt),
+                color = c.textFaint,
+                fontSize = 10.sp,
+            )
         }
         Text(
-            "Confirma hora de llegada a CDMX. Cliente espera por las 17:00.",
-            color = c.text,
+            message?.content?.takeIf { it.isNotBlank() } ?: "Sin mensajes aún",
+            color = if (message == null) c.textMute else c.text,
             fontWeight = FontWeight.SemiBold,
             fontSize = 14.sp,
+            maxLines = 2,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
         )
+    }
+}
+
+private val timeFormatter = SimpleDateFormat("HH:mm", Locale.getDefault())
+
+/**
+ * Shorthand for the timestamp on the preview card.
+ *  - <1 min     → "ahora"
+ *  - <60 min    → "hace N min"
+ *  - <24 hr     → "hace N h"
+ *  - older      → HH:mm
+ */
+private fun formatRelativeAgo(unixSeconds: Long?): String {
+    if (unixSeconds == null || unixSeconds <= 0L) return ""
+    val nowSec = System.currentTimeMillis() / 1000
+    val diff = nowSec - unixSeconds
+    return when {
+        diff < 60 -> "ahora"
+        diff < 3600 -> "hace ${diff / 60} min"
+        diff < 86_400 -> "hace ${diff / 3600} h"
+        else -> timeFormatter.format(Date(unixSeconds * 1000))
     }
 }
