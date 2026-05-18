@@ -95,4 +95,16 @@ class ChatwootRepository(
     } catch (e: Exception) {
         Resource.Error(e.message ?: "No se pudo enviar el mensaje.", e)
     }
+
+    /**
+     * Bumps `contact_last_seen_at` server-side so the unread counter resets
+     * across devices. Best-effort: failures don't propagate, since losing
+     * one read receipt is a minor inconsistency, not worth interrupting UI.
+     */
+    suspend fun markAsRead(sourceId: String, conversationId: Int): Resource<Unit> = try {
+        api.updateLastSeen(inboxIdentifier, sourceId, conversationId)
+        Resource.Success(Unit)
+    } catch (e: Exception) {
+        Resource.Error(e.message ?: "No se pudo actualizar last_seen.", e)
+    }
 }

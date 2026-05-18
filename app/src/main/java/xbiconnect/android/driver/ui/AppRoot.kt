@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -28,9 +29,11 @@ import xbiconnect.android.driver.data.PairedVehicle
 import xbiconnect.android.driver.data.Resource
 import xbiconnect.android.driver.data.ServerMode
 import xbiconnect.android.driver.data.network.ApiClient
+import xbiconnect.android.driver.data.chat.ChatSessionHolder
 import xbiconnect.android.driver.data.repository.ChatwootRepository
 import xbiconnect.android.driver.data.repository.DriversRepository
 import xbiconnect.android.driver.data.repository.VehiclePairingRepository
+import xbiconnect.android.driver.data.state.ChatState
 import xbiconnect.android.driver.data.state.DriverState
 import xbiconnect.android.driver.data.state.PairingState
 import xbiconnect.android.driver.ui.components.DriverIconName
@@ -225,10 +228,27 @@ private fun AppShell(
 ) {
     val prefs = LocalDriverPreferences.current
     val serverMode by prefs.serverMode.collectAsState(initial = ServerMode.PROD)
+
+    // Chat session lives at the shell so it persists across tab switches and
+    // the WebSocket keeps streaming while the user is in Trip / Comunicados /
+    // anything else. Disposed when AppShell leaves composition (unlink, etc.).
+    val chatSession = rememberChatSession(serverMode, paired)
+
+    // Bumping last_seen the moment the user enters Chat keeps the badge in
+    // sync with the user's actual attention and matches what dispatchers see.
+    LaunchedEffect(section, chatSession) {
+        if (section == Section.CHAT) chatSession?.markRead()
+    }
+
+    // While the user is looking at Chat the badge should be 0 even if more
+    // messages arrive — the unread-by-VIN count is correct, it's just not the
+    // signal we want to render at that moment.
+    val chatBadge = if (section == Section.CHAT) 0 else (chatSession?.unreadCount ?: 0)
+
     val items = listOf(
         RailItem(Section.HOME, DriverIconName.HOME, stringResource(R.string.nav_trip)),
         RailItem(Section.ANNOUNCEMENTS, DriverIconName.BELL, stringResource(R.string.nav_announcements), badge = 1),
-        RailItem(Section.CHAT, DriverIconName.CHAT, stringResource(R.string.nav_chat), badge = 2),
+        RailItem(Section.CHAT, DriverIconName.CHAT, stringResource(R.string.nav_chat), badge = chatBadge),
         RailItem(Section.TEAM, DriverIconName.USERS, stringResource(R.string.nav_team)),
         RailItem(Section.SETTINGS, DriverIconName.SETTINGS, stringResource(R.string.nav_settings)),
     )
@@ -250,16 +270,11 @@ private fun AppShell(
                     driverState = driverState,
                 )
                 Section.ANNOUNCEMENTS -> ScreenAnnouncements()
-                Section.CHAT -> {
-                    val chatwootRepo = rememberChatwootRepository(serverMode, paired)
-                    ScreenChat(
-                        onBack = { onSection(Section.HOME) },
-                        repo = chatwootRepo,
-                        sourceId = paired?.vin,
-                        contactName = paired?.label?.let { "Truck $it" } ?: paired?.vin,
-                        contactAttributes = paired?.let { buildContactAttributes(it) },
-                    )
-                }
+                Section.CHAT -> ScreenChat(
+                    onBack = { onSection(Section.HOME) },
+                    state = chatSession?.state ?: ChatState.Error("Chat no disponible — la tableta no está enlazada o el servidor no devolvió inbox."),
+                    onSend = { text -> chatSession?.send(text) },
+                )
                 Section.TEAM -> ScreenTeam()
                 Section.SETTINGS -> ScreenSettings(onUnlink = onUnlink)
             }
@@ -268,18 +283,34 @@ private fun AppShell(
 }
 
 @Composable
-private fun rememberChatwootRepository(
+private fun rememberChatSession(
     serverMode: ServerMode,
     paired: PairedVehicle?,
-): ChatwootRepository? {
+): ChatSessionHolder? {
     val baseUrl = DriverConfig.resolveInstanceUrl(serverMode, paired)
     val inboxIdentifier = DriverConfig.resolveInboxIdentifier(serverMode, paired) ?: return null
-    return remember(baseUrl, inboxIdentifier) {
-        ChatwootRepository(
+    val sourceId = paired?.vin?.takeIf { it.isNotBlank() } ?: return null
+    val contactName = paired.label?.let { "Truck $it" } ?: sourceId
+    val attributes = buildContactAttributes(paired)
+    val scope = rememberCoroutineScope()
+    val holder = remember(baseUrl, inboxIdentifier, sourceId) {
+        val repo = ChatwootRepository(
             api = ApiClient.instanceApi(baseUrl),
             inboxIdentifier = inboxIdentifier,
         )
+        ChatSessionHolder(
+            scope = scope,
+            repo = repo,
+            sourceId = sourceId,
+            contactName = contactName,
+            contactAttributes = attributes,
+            wsBaseUrl = baseUrl,
+        ).also { it.start() }
     }
+    DisposableEffect(holder) {
+        onDispose { holder.dispose() }
+    }
+    return holder
 }
 
 private fun buildContactAttributes(p: PairedVehicle): Map<String, Any?> = buildMap {

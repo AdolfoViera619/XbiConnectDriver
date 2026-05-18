@@ -28,7 +28,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -45,73 +44,41 @@ import androidx.compose.ui.unit.sp
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import java.util.UUID
-import kotlinx.coroutines.launch
 import xbiconnect.android.driver.R
-import xbiconnect.android.driver.data.Resource
 import xbiconnect.android.driver.data.api.dto.MessageDto
 import xbiconnect.android.driver.data.api.dto.MessageType
-import xbiconnect.android.driver.data.repository.ChatwootRepository
 import xbiconnect.android.driver.data.state.ChatState
 import xbiconnect.android.driver.ui.components.DriverIcon
 import xbiconnect.android.driver.ui.components.DriverIconName
 import xbiconnect.android.driver.ui.theme.LocalAppColors
 
 /**
- * @param repo  ChatwootRepository bound to the right Chatwoot instance + inbox.
- *              Null when the app is not paired or no inbox identifier is
- *              available (e.g. PROD with a gateway that doesn't return it yet);
- *              in that case the screen shows a clear empty state.
- * @param sourceId  Contact source_id — we use the VIN.
- * @param contactName  Display name for the contact ("Truck 45"). Used when
- *              the contact has to be created on the fly.
+ * Pure renderer for the chat. All state and side effects (initial load,
+ * WebSocket subscription, optimistic sends, mark-as-read) live in
+ * [xbiconnect.android.driver.data.chat.ChatSessionHolder] up at the AppShell
+ * level so they survive tab switches.
+ *
+ * This screen is intentionally dumb: it draws [state] and forwards user
+ * actions through [onSend].
  */
 @Composable
 fun ScreenChat(
     onBack: () -> Unit,
-    repo: ChatwootRepository?,
-    sourceId: String?,
-    contactName: String?,
-    contactAttributes: Map<String, Any?>? = null,
+    state: ChatState,
+    onSend: (String) -> Unit,
 ) {
     val c = LocalAppColors.current
-    val scope = rememberCoroutineScope()
-    var state by remember(repo, sourceId) { mutableStateOf<ChatState>(ChatState.Idle) }
     var input by rememberSaveable { mutableStateOf("") }
     var showVoice by remember { mutableStateOf(false) }
 
-    LaunchedEffect(repo, sourceId) {
-        if (repo == null || sourceId.isNullOrBlank()) {
-            state = ChatState.Error("Chat no disponible — la tableta no está enlazada.")
-            return@LaunchedEffect
-        }
-        state = ChatState.Loading
-        val contact = when (val r = repo.findOrCreateContact(sourceId, contactName, contactAttributes)) {
-            is Resource.Success -> r.data
-            is Resource.Error -> { state = ChatState.Error(r.message); return@LaunchedEffect }
-            else -> return@LaunchedEffect
-        }
-        val convo = when (val r = repo.loadOrStartConversation(sourceId)) {
-            is Resource.Success -> r.data
-            is Resource.Error -> { state = ChatState.Error(r.message); return@LaunchedEffect }
-            else -> return@LaunchedEffect
-        }
-        val messages = when (val r = repo.listMessages(sourceId, convo.id)) {
-            is Resource.Success -> r.data
-            is Resource.Error -> { state = ChatState.Error(r.message); return@LaunchedEffect }
-            else -> return@LaunchedEffect
-        }
-        state = ChatState.Ready(contact, convo, messages.sortedBy { it.createdAt })
-    }
-
     Column(Modifier.fillMaxSize()) {
         ChatHeader(onBack = onBack)
-        when (val s = state) {
+        when (state) {
             ChatState.Idle, ChatState.Loading -> LoadingPanel()
-            is ChatState.Error -> ErrorPanel(s.message)
+            is ChatState.Error -> ErrorPanel(state.message)
             is ChatState.Ready -> {
                 MessagesList(
-                    messages = s.messages,
+                    messages = state.messages,
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f)
@@ -120,32 +87,12 @@ fun ScreenChat(
                 Composer(
                     input = input,
                     onInput = { input = it },
-                    sending = s.sending,
+                    sending = state.sending,
                     onSend = {
                         val text = input.trim()
-                        if (text.isBlank() || repo == null || sourceId == null) return@Composer
+                        if (text.isEmpty()) return@Composer
                         input = ""
-                        val echoId = UUID.randomUUID().toString()
-                        val optimistic = optimisticMessage(text, s.conversation.id, echoId)
-                        state = s.copy(messages = s.messages + optimistic, sending = true)
-                        scope.launch {
-                            val current = state as? ChatState.Ready ?: return@launch
-                            when (val r = repo.sendMessage(sourceId, s.conversation.id, text, echoId)) {
-                                is Resource.Success -> {
-                                    state = current.copy(
-                                        messages = current.messages.map { m ->
-                                            if (m.echoId == echoId) r.data else m
-                                        },
-                                        sending = false,
-                                    )
-                                }
-                                is Resource.Error -> {
-                                    state = current.copy(sending = false)
-                                    // Optimistic message stays so user sees what failed.
-                                }
-                                else -> {}
-                            }
-                        }
+                        onSend(text)
                     },
                     onMic = { showVoice = true },
                 )
@@ -157,37 +104,12 @@ fun ScreenChat(
         VoiceModal(
             onDismiss = { showVoice = false },
             onSend = { dictated ->
-                if (state is ChatState.Ready && repo != null && sourceId != null) {
-                    val ready = state as ChatState.Ready
-                    val echoId = UUID.randomUUID().toString()
-                    val optimistic = optimisticMessage(dictated, ready.conversation.id, echoId)
-                    state = ready.copy(messages = ready.messages + optimistic, sending = true)
-                    scope.launch {
-                        val current = state as? ChatState.Ready ?: return@launch
-                        when (val r = repo.sendMessage(sourceId, ready.conversation.id, dictated, echoId)) {
-                            is Resource.Success -> state = current.copy(
-                                messages = current.messages.map { if (it.echoId == echoId) r.data else it },
-                                sending = false,
-                            )
-                            is Resource.Error -> state = current.copy(sending = false)
-                            else -> {}
-                        }
-                    }
-                }
+                onSend(dictated)
                 showVoice = false
             },
         )
     }
 }
-
-private fun optimisticMessage(content: String, conversationId: Int, echoId: String) = MessageDto(
-    id = 0,
-    content = content,
-    messageType = MessageType.INCOMING,
-    createdAt = System.currentTimeMillis() / 1000,
-    conversationId = conversationId,
-    echoId = echoId,
-)
 
 @Composable
 private fun ChatHeader(onBack: () -> Unit) {
@@ -269,7 +191,8 @@ private fun MessagesList(messages: List<MessageDto>, modifier: Modifier = Modifi
 @Composable
 private fun MessageBubble(m: MessageDto) {
     val c = LocalAppColors.current
-    val fromTruck = m.messageType == MessageType.INCOMING  // public API: incoming = from contact = from truck
+    // Public Channel::Api convention: INCOMING = from the contact (the truck).
+    val fromTruck = m.messageType == MessageType.INCOMING
     Row(
         Modifier.fillMaxWidth(),
         horizontalArrangement = if (fromTruck) Arrangement.End else Arrangement.Start,

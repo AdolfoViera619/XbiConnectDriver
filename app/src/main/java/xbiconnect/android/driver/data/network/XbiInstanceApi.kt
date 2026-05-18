@@ -65,4 +65,16 @@ interface XbiInstanceApi {
         @Path("conversation_id") conversationId: Int,
         @Body body: SendMessageRequest,
     ): MessageDto
+
+    /**
+     * Bumps `contact_last_seen_at` server-side. The endpoint returns
+     * `head :ok` with no body — Retrofit needs `Unit` for that to deserialize
+     * cleanly. Verified in `ConversationsController#update_last_seen`.
+     */
+    @POST("public/api/v1/inboxes/{inbox_id}/contacts/{source_id}/conversations/{conversation_id}/update_last_seen")
+    suspend fun updateLastSeen(
+        @Path("inbox_id") inboxIdentifier: String,
+        @Path("source_id") sourceId: String,
+        @Path("conversation_id") conversationId: Int,
+    )
 }
